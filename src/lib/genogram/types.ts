@@ -1,0 +1,90 @@
+export type Gender = "male" | "female" | "unknown";
+
+export type StructuralRelType =
+  | "marriage"
+  | "cohabitation"
+  | "separation"
+  | "divorce"
+  | "parent_child"
+  | "adopted"
+  | "sibling";
+
+export type EmotionalRelType = "close" | "distant" | "cutoff" | "conflict";
+
+export type RelType = StructuralRelType | EmotionalRelType;
+
+export type Person = {
+  id: string;
+  name: string;
+  gender: Gender;
+  age: number | null;
+  birthYear: number | null;
+  deathYear: number | null;
+  deceased: boolean;
+  identifiedPatient: boolean;
+  occupation: string;
+  notes: string;
+  generation: number;
+  x: number;
+  y: number;
+};
+
+export type Relationship = {
+  id: string;
+  type: RelType;
+  a: string;
+  b: string;
+};
+
+export type GenogramData = {
+  persons: Person[];
+  relationships: Relationship[];
+};
+
+export const UNION_TYPES: RelType[] = [
+  "marriage",
+  "cohabitation",
+  "separation",
+  "divorce",
+];
+
+export const PARENT_TYPES: RelType[] = ["parent_child", "adopted"];
+
+export const REL_LABELS: Record<RelType, string> = {
+  marriage: "Matrimonio / pareja",
+  cohabitation: "Unión de hecho",
+  separation: "Separación",
+  divorce: "Divorcio",
+  parent_child: "Padre/madre → hijo/a",
+  adopted: "Adopción",
+  sibling: "Hermanos",
+  close: "Relación cercana",
+  distant: "Relación distante",
+  cutoff: "Corte relacional",
+  conflict: "Conflicto",
+};
+
+export function emptyPerson(partial: Partial<Person> & { id: string; name: string }): Person {
+  return {
+    gender: "unknown",
+    age: null,
+    birthYear: null,
+    deathYear: null,
+    deceased: false,
+    identifiedPatient: false,
+    occupation: "",
+    notes: "",
+    generation: 0,
+    x: 120,
+    y: 80,
+    ...partial,
+  };
+}
+
+export function personYears(p: Person): string {
+  if (p.birthYear && p.deathYear) return `${p.birthYear}–${p.deathYear}`;
+  if (p.deathYear) return `† ${p.deathYear}`;
+  if (p.age != null) return `${p.age} años`;
+  if (p.birthYear) return `${p.birthYear}–`;
+  return "";
+}

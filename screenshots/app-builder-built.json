@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Genograma",
+      "hasCanvas": false,
+      "bodyTextLen": 629,
+      "bodyTextHash": "747c7a2caf634d4cf9515d3d9917dc484f12e86c49423648299ab64e9f57e6e2",
+      "bodyTextPrefix": "Genograma ficha familiar Andrés Suárez Moreno Organizar SVG PNG ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Genograma",
+      "hasCanvas": false,
+      "bodyTextLen": 104,
+      "bodyTextHash": "078a87422b71a9ef16db26f52f6d0e36224e1097b32c24b8680f0c3a1fbb3b0a",
+      "bodyTextPrefix": "Genograma PNG María 45 años Juan 48 años Laura 15 años Pedro 12 ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}
