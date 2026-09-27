@@ -25,6 +25,7 @@ export type Person = {
   occupation: string;
   notes: string;
   generation: number;
+  household: number | null;
   x: number;
   y: number;
 };
@@ -75,6 +76,7 @@ export function emptyPerson(partial: Partial<Person> & { id: string; name: strin
     occupation: "",
     notes: "",
     generation: 0,
+    household: null,
     x: 120,
     y: 80,
     ...partial,

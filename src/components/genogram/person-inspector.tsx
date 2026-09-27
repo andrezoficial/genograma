@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { REL_LABELS, type Gender, type Person } from "@/lib/genogram/types";
 import { useGenogram } from "@/lib/genogram/store";
+import { cn } from "@/lib/utils";
 
 const selectClass =
   "h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35";
@@ -23,6 +24,7 @@ export function PersonInspector({ person }: { person: Person }) {
   const [age, setAge] = useState(person.age?.toString() ?? "");
   const [birthYear, setBirthYear] = useState(person.birthYear?.toString() ?? "");
   const [deathYear, setDeathYear] = useState(person.deathYear?.toString() ?? "");
+  const [household, setHousehold] = useState(person.household?.toString() ?? "");
 
   useEffect(() => {
     setName(person.name);
@@ -31,10 +33,23 @@ export function PersonInspector({ person }: { person: Person }) {
     setAge(person.age?.toString() ?? "");
     setBirthYear(person.birthYear?.toString() ?? "");
     setDeathYear(person.deathYear?.toString() ?? "");
-  }, [person.id, person.name, person.occupation, person.notes, person.age, person.birthYear, person.deathYear]);
+    setHousehold(person.household?.toString() ?? "");
+  }, [
+    person.id,
+    person.name,
+    person.occupation,
+    person.notes,
+    person.age,
+    person.birthYear,
+    person.deathYear,
+    person.household,
+  ]);
 
   const related = relationships.filter((r) => r.a === person.id || r.b === person.id);
   const nameOf = (id: string) => persons.find((p) => p.id === id)?.name ?? id;
+  const householdOptions = Array.from(
+    new Set(persons.map((p) => p.household).filter((n): n is number => n != null)),
+  ).sort((a, b) => a - b);
 
   return (
     <div className="space-y-3">
@@ -140,6 +155,48 @@ export function PersonInspector({ person }: { person: Person }) {
         />
         Paciente identificado (doble trazo)
       </label>
+      <div>
+        <Label htmlFor="edit-household">Núcleo familiar (con quién vive)</Label>
+        <Input
+          id="edit-household"
+          inputMode="numeric"
+          placeholder="Nº de núcleo, ej. 1"
+          value={household}
+          onFocus={() => checkpoint()}
+          onChange={(e) => {
+            setHousehold(e.target.value);
+            const n = e.target.value === "" ? null : Number(e.target.value);
+            updatePerson(
+              person.id,
+              { household: n != null && Number.isFinite(n) ? n : null },
+              { history: false },
+            );
+          }}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Asigna el mismo número a quienes conviven; se encierran en un círculo punteado en el mapa.
+        </p>
+        {householdOptions.length > 0 ? (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {householdOptions.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-xs",
+                  person.household === n ? "border-ink bg-secondary font-semibold" : "border-input text-muted-foreground",
+                )}
+                onClick={() => {
+                  setHousehold(String(n));
+                  updatePerson(person.id, { household: n });
+                }}
+              >
+                Núcleo {n}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
       <div>
         <Label htmlFor="edit-occ">Ocupación</Label>
         <Input

@@ -272,6 +272,47 @@ function RelLayer({ persons, relationships }: { persons: Person[]; relationships
   return <g>{nodes}</g>;
 }
 
+const HOUSEHOLD_STROKE = "#5b6b5e";
+
+function HouseholdLayer({ persons }: { persons: Person[] }) {
+  const groups = new Map<number, Person[]>();
+  for (const p of persons) {
+    if (p.household == null) continue;
+    const arr = groups.get(p.household) ?? [];
+    arr.push(p);
+    groups.set(p.household, arr);
+  }
+  if (groups.size === 0) return null;
+
+  const PAD = 46;
+  const nodes: ReactNode[] = [];
+  groups.forEach((members, id) => {
+    const minX = Math.min(...members.map((p) => p.x));
+    const maxX = Math.max(...members.map((p) => p.x));
+    const minY = Math.min(...members.map((p) => p.y));
+    const maxY = Math.max(...members.map((p) => p.y));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const rx = (maxX - minX) / 2 + PAD;
+    const ry = (maxY - minY) / 2 + PAD + 14;
+    nodes.push(
+      <ellipse
+        key={`household-${id}`}
+        cx={cx}
+        cy={cy}
+        rx={rx}
+        ry={ry}
+        fill="none"
+        stroke={HOUSEHOLD_STROKE}
+        strokeWidth={1.6}
+        strokeDasharray="6 6"
+        opacity={0.75}
+      />,
+    );
+  });
+  return <g>{nodes}</g>;
+}
+
 function PersonMark({
   person,
   selected,
@@ -655,6 +696,7 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
         data-world-svg
       >
         <g data-world transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
+          <HouseholdLayer persons={persons} />
           <RelLayer persons={persons} relationships={relationships} />
           {persons.map((p) => (
             <PersonMark
@@ -822,6 +864,12 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
                 <span className="flex items-center gap-2"><span className="relative inline-block size-3 border-2 border-ink bg-unknown" /> Género s/d</span>
                 <span className="flex items-center gap-2"><span className="relative inline-block size-3 border-2 border-ink bg-deceased after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-[9px] after:leading-none after:text-card after:content-['×']" /> Fallecido/a</span>
                 <span className="col-span-2 flex items-center gap-2"><span className="inline-block size-3 rounded-full border-2 border-dashed" style={{ borderColor: "#8a5a3c" }} /> Paciente identificado</span>
+              </div>
+            </div>
+            <div>
+              <div className="mb-1 text-[10px] font-semibold tracking-[0.06em] text-foreground/55 uppercase">Convivencia</div>
+              <div className="grid grid-cols-1 gap-1.5">
+                <span className="flex items-center gap-2"><span className="inline-block h-3.5 w-5 rounded-full border-2 border-dashed" style={{ borderColor: "#5b6b5e" }} /> Núcleo familiar (viven juntos)</span>
               </div>
             </div>
             <div>
