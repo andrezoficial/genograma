@@ -168,7 +168,13 @@ export function autoLayout(persons: Person[], relationships: Relationship[]): Pe
   return ids.map((id) => byId.get(id)!);
 }
 
-export function boundingBox(persons: Person[], pad = 80, minW = 0, minH = 0) {
+export function boundingBox(
+  persons: Person[],
+  pad = 80,
+  minW = 0,
+  minH = 0,
+  households: { id: number; labelDx?: number; labelDy?: number }[] = [],
+) {
   if (persons.length === 0) return { minX: 0, minY: 0, width: Math.max(minW, 800), height: Math.max(minH, 500) };
   let minX = Infinity,
     maxX = -Infinity,
@@ -187,7 +193,11 @@ export function boundingBox(persons: Person[], pad = 80, minW = 0, minH = 0) {
     arr.push(p);
     groups.set(p.household, arr);
   }
-  groups.forEach((members) => {
+  const offsetOf = (id: number) => {
+    const h = households.find((x) => x.id === id);
+    return { dx: h?.labelDx ?? 0, dy: h?.labelDy ?? 0 };
+  };
+  groups.forEach((members, id) => {
     const hx0 = Math.min(...members.map((p) => p.x));
     const hx1 = Math.max(...members.map((p) => p.x));
     const hy0 = Math.min(...members.map((p) => p.y));
@@ -196,10 +206,14 @@ export function boundingBox(persons: Person[], pad = 80, minW = 0, minH = 0) {
     const cy = (hy0 + hy1) / 2;
     const rx = (hx1 - hx0) / 2 + 46;
     const ry = (hy1 - hy0) / 2 + 60;
-    minX = Math.min(minX, cx - rx);
-    maxX = Math.max(maxX, cx + rx);
-    minY = Math.min(minY, cy - ry - 22);
-    maxY = Math.max(maxY, cy + ry);
+    const { dx, dy } = offsetOf(id);
+    // Default label sits at (cx, cy - ry - 10); account for drag offset + text extent
+    const labelX = cx + dx;
+    const labelY = cy - ry - 10 + dy;
+    minX = Math.min(minX, cx - rx, labelX - 70);
+    maxX = Math.max(maxX, cx + rx, labelX + 70);
+    minY = Math.min(minY, cy - ry - 36 + Math.min(0, dy), labelY - 14);
+    maxY = Math.max(maxY, cy + ry, labelY + 6);
   });
   return {
     minX: minX - pad,

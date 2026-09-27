@@ -289,7 +289,15 @@ function RelLayer({ persons, relationships }: { persons: Person[]; relationships
 
 const HOUSEHOLD_STROKE = "#5b6b5e";
 
-function HouseholdLayer({ persons, households }: { persons: Person[]; households: Household[] }) {
+function HouseholdLayer({
+  persons,
+  households,
+  onLabelPointerDown,
+}: {
+  persons: Person[];
+  households: Household[];
+  onLabelPointerDown?: (e: PointerEvent, householdId: number, baseX: number, baseY: number) => void;
+}) {
   const groups = new Map<number, Person[]>();
   for (const p of persons) {
     if (p.household == null) continue;
@@ -299,7 +307,14 @@ function HouseholdLayer({ persons, households }: { persons: Person[]; households
   }
   if (groups.size === 0) return null;
 
-  const labelOf = (id: number) => households.find((h) => h.id === id)?.label || "Viven juntos";
+  const metaOf = (id: number) => {
+    const h = households.find((x) => x.id === id);
+    return {
+      label: h?.label || "Viven juntos",
+      dx: h?.labelDx ?? 0,
+      dy: h?.labelDy ?? 0,
+    };
+  };
   const PAD = 46;
   const nodes: ReactNode[] = [];
   groups.forEach((members, id) => {
@@ -311,6 +326,11 @@ function HouseholdLayer({ persons, households }: { persons: Person[]; households
     const cy = (minY + maxY) / 2;
     const rx = (maxX - minX) / 2 + PAD;
     const ry = (maxY - minY) / 2 + PAD + 14;
+    const { label, dx, dy } = metaOf(id);
+    const baseX = cx;
+    const baseY = cy - ry - 10;
+    const lx = baseX + dx;
+    const ly = baseY + dy;
     nodes.push(
       <g key={`household-${id}`}>
         <ellipse
@@ -323,20 +343,32 @@ function HouseholdLayer({ persons, households }: { persons: Person[]; households
           strokeWidth={1.6}
           strokeDasharray="6 6"
           opacity={0.75}
+          pointerEvents="none"
         />
-        <text
-          x={cx}
-          y={cy - ry - 10}
-          textAnchor="middle"
-          fontSize={11}
-          fontWeight={700}
-          letterSpacing={0.3}
-          fill={HOUSEHOLD_STROKE}
-          fontFamily={TYPEFACE}
-          opacity={0.85}
+        <g
+          style={{ cursor: "grab" }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onLabelPointerDown?.(e, id, baseX, baseY);
+          }}
         >
-          {labelOf(id).toUpperCase()}
-        </text>
+          {/* Invisible hit area so the label is easy to grab */}
+          <rect x={lx - 72} y={ly - 16} width={144} height={22} fill="transparent" />
+          <text
+            x={lx}
+            y={ly}
+            textAnchor="middle"
+            fontSize={11}
+            fontWeight={700}
+            letterSpacing={0.3}
+            fill={HOUSEHOLD_STROKE}
+            fontFamily={TYPEFACE}
+            opacity={0.85}
+            style={{ userSelect: "none" }}
+          >
+            {label.toUpperCase()}
+          </text>
+        </g>
       </g>,
     );
   });
@@ -463,6 +495,7 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
   const selectedId = useGenogram((s) => s.selectedId);
   const select = useGenogram((s) => s.select);
   const movePerson = useGenogram((s) => s.movePerson);
+  const moveHouseholdLabel = useGenogram((s) => s.moveHouseholdLabel);
   const checkpoint = useGenogram((s) => s.checkpoint);
   const persist = useGenogram((s) => s.persist);
   const addPerson = useGenogram((s) => s.addPerson);
@@ -481,8 +514,9 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
   const [draft, setDraft] = useState<{ x: number; y: number; name: string; gender: Gender } | null>(null);
   const draftNameRef = useRef<HTMLInputElement>(null);
   const drag = useRef<null | {
-    kind: "pan" | "person";
+    kind: "pan" | "person" | "household-label";
     id?: string;
+    householdId?: number;
     sx: number;
     sy: number;
     vx: number;
@@ -509,7 +543,7 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
     const w = el.clientWidth;
     const h = el.clientHeight;
     if (w < 40 || h < 40) return;
-    const box = boundingBox(persons, 28, 80, 80);
+    const box = boundingBox(persons, 28, 80, 80, households);
     const toolW = 56;
     const pad = 16;
     const availW = Math.max(80, w - pad * 2 - toolW);
@@ -663,6 +697,26 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
     };
   };
 
+  const onLabelPointerDown = (e: PointerEvent, householdId: number, _baseX: number, _baseY: number) => {
+    if (tool !== "select") return;
+    e.stopPropagation();
+    svgRef.current?.setPointerCapture(e.pointerId);
+    checkpoint();
+    const h = households.find((x) => x.id === householdId);
+    const current = viewRef.current;
+    drag.current = {
+      kind: "household-label",
+      householdId,
+      sx: e.clientX,
+      sy: e.clientY,
+      vx: current.x,
+      vy: current.y,
+      px: h?.labelDx ?? 0,
+      py: h?.labelDy ?? 0,
+      moved: false,
+    };
+  };
+
   const onPointerMove = (e: PointerEvent) => {
     const d = drag.current;
     if (!d) return;
@@ -671,13 +725,20 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
     if (Math.hypot(dx, dy) > 3) d.moved = true;
     if (d.kind === "pan") {
       setView({ k: viewRef.current.k, x: d.vx + dx, y: d.vy + dy });
-    } else if (d.id) {
+    } else if (d.kind === "person" && d.id) {
       movePerson(d.id, d.px + dx / viewRef.current.k, d.py + dy / viewRef.current.k);
+    } else if (d.kind === "household-label" && d.householdId != null) {
+      moveHouseholdLabel(d.householdId, d.px + dx / viewRef.current.k, d.py + dy / viewRef.current.k);
     }
   };
 
   const onPointerUp = () => {
-    if (drag.current?.kind === "person" && drag.current.moved) persist();
+    if (
+      (drag.current?.kind === "person" || drag.current?.kind === "household-label") &&
+      drag.current.moved
+    ) {
+      persist();
+    }
     drag.current = null;
   };
 
@@ -729,7 +790,7 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
         data-world-svg
       >
         <g data-world transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
-          <HouseholdLayer persons={persons} households={households} />
+          <HouseholdLayer persons={persons} households={households} onLabelPointerDown={onLabelPointerDown} />
           <RelLayer persons={persons} relationships={relationships} />
           {persons.map((p) => (
             <PersonMark

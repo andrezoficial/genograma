@@ -40,6 +40,9 @@ export type Relationship = {
 export type Household = {
   id: number;
   label: string;
+  /** Offset of the household label relative to its default position above the dashed ellipse. */
+  labelDx?: number;
+  labelDy?: number;
 };
 
 export type GenogramData = {

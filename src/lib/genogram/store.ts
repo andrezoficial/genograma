@@ -62,6 +62,7 @@ type State = {
   removeRelationship: (id: string) => void;
   linkHousehold: (a: string, b: string) => void;
   setHouseholdLabel: (id: number, label: string) => void;
+  moveHouseholdLabel: (id: number, dx: number, dy: number) => void;
   movePerson: (id: string, x: number, y: number) => void;
   layout: () => void;
   clear: () => void;
@@ -98,7 +99,12 @@ function sanitize(data: GenogramData): GenogramData {
   const usedHouseholds = new Set(persons.map((p) => p.household).filter((n): n is number => n != null));
   const households = (data.households ?? [])
     .filter((h) => h && typeof h.id === "number" && usedHouseholds.has(h.id))
-    .map((h) => ({ id: h.id, label: String(h.label ?? "").trim() || DEFAULT_HOUSEHOLD_LABEL }));
+    .map((h) => ({
+      id: h.id,
+      label: String(h.label ?? "").trim() || DEFAULT_HOUSEHOLD_LABEL,
+      labelDx: typeof h.labelDx === "number" && Number.isFinite(h.labelDx) ? h.labelDx : 0,
+      labelDy: typeof h.labelDy === "number" && Number.isFinite(h.labelDy) ? h.labelDy : 0,
+    }));
   return { persons, relationships, households };
 }
 
@@ -411,6 +417,14 @@ export const useGenogram = create<State>((set, get) => ({
         : [...households, { id, label: clean }],
     });
     get().persist();
+  },
+
+  moveHouseholdLabel: (id, dx, dy) => {
+    set({
+      households: get().households.map((h) =>
+        h.id === id ? { ...h, labelDx: dx, labelDy: dy } : h,
+      ),
+    });
   },
 
   movePerson: (id, x, y) => {

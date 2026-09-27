@@ -27,6 +27,7 @@ export function GenogramApp() {
   const hydrated = useGenogram((s) => s.hydrated);
   const persons = useGenogram((s) => s.persons);
   const relationships = useGenogram((s) => s.relationships);
+  const households = useGenogram((s) => s.households);
   const layout = useGenogram((s) => s.layout);
   const undo = useGenogram((s) => s.undo);
   const redo = useGenogram((s) => s.redo);
@@ -82,7 +83,7 @@ export function GenogramApp() {
     clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     const world = clone.querySelector("[data-world]") as SVGGElement | null;
     world?.removeAttribute("transform");
-    const box = boundingBox(persons, 70, 800, 500);
+    const box = boundingBox(persons, 70, 800, 500, households);
     clone.setAttribute("viewBox", `${box.minX} ${box.minY} ${box.width} ${box.height}`);
     clone.setAttribute("width", String(Math.round(box.width)));
     clone.setAttribute("height", String(Math.round(box.height)));
@@ -113,7 +114,7 @@ export function GenogramApp() {
   async function onExportReport() {
     const svg = svgRef.current;
     if (!svg || persons.length === 0) return;
-    const box = boundingBox(persons, 70, 800, 500);
+    const box = boundingBox(persons, 70, 800, 500, households);
     const reportSvg = buildReportSvg(svg, box, reportMeta);
     document.body.appendChild(reportSvg);
     const filenameBase = (reportMeta.title || "genograma-informe").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
