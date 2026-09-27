@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { Download, FileJson, RotateCcw, RotateCw, Trash2, UnfoldHorizontal, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ClipboardList, Download, FileJson, RotateCcw, RotateCw, Trash2, UnfoldHorizontal, Upload } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,8 +12,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { boundingBox } from "@/lib/genogram/layout";
-import { downloadBlob, exportPngElement, exportSvgElement } from "@/lib/genogram/export";
+import { buildReportSvg, downloadBlob, exportPngElement, exportSvgElement, type ReportMeta } from "@/lib/genogram/export";
 import { useGenogram } from "@/lib/genogram/store";
 import { cn } from "@/lib/utils";
 import { GenogramCanvas } from "./canvas";
@@ -40,6 +42,13 @@ export function GenogramApp() {
   const svgRef = useRef<SVGSVGElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const selected = persons.find((p) => p.id === selectedId) ?? null;
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportMeta, setReportMeta] = useState<ReportMeta>({
+    title: "",
+    professional: "",
+    date: new Date().toISOString().slice(0, 10),
+    notes: "",
+  });
 
   useEffect(() => {
     hydrate();
@@ -99,6 +108,19 @@ export function GenogramApp() {
     if (!clone) return;
     exportSvgElement(clone);
     useGenogram.setState({ status: "SVG descargado." });
+  }
+
+  async function onExportReport() {
+    const svg = svgRef.current;
+    if (!svg || persons.length === 0) return;
+    const box = boundingBox(persons, 70, 800, 500);
+    const reportSvg = buildReportSvg(svg, box, reportMeta);
+    document.body.appendChild(reportSvg);
+    const filenameBase = (reportMeta.title || "genograma-informe").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    await exportPngElement(reportSvg, `${filenameBase || "genograma-informe"}.png`);
+    reportSvg.remove();
+    setReportOpen(false);
+    useGenogram.setState({ status: "Informe descargado." });
   }
 
   function onExportJson() {
@@ -185,6 +207,27 @@ export function GenogramApp() {
             onClick={onExportSvg}
           >
             <Download /> SVG
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={persons.length === 0}
+            className="hidden text-bar-foreground hover:bg-white/10 hover:text-bar-foreground md:inline-flex"
+            onClick={() => setReportOpen(true)}
+          >
+            <ClipboardList /> Informe
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            disabled={persons.length === 0}
+            className="size-10 text-bar-foreground hover:bg-white/10 hover:text-bar-foreground md:hidden"
+            onClick={() => setReportOpen(true)}
+            aria-label="Generar informe"
+          >
+            <ClipboardList />
           </Button>
           <Button
             type="button"
@@ -284,6 +327,69 @@ export function GenogramApp() {
           ) : null}
         </div>
       </div>
+
+      {reportOpen ? (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setReportOpen(false)}>
+          <form
+            className="w-full max-w-sm rounded-xl bg-card p-4 shadow-[var(--shadow-border)]"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => {
+              e.preventDefault();
+              onExportReport();
+            }}
+          >
+            <p className="font-display text-lg font-medium tracking-tight">Informe clínico</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Genera una imagen lista para el expediente: título, profesional, fecha y leyenda completa incluidos.
+            </p>
+            <label className="mt-3 block text-xs font-medium tracking-wide text-muted-foreground">
+              Título del caso
+              <Input
+                className="mt-1.5"
+                placeholder="Ficha familiar — Familia XX"
+                value={reportMeta.title}
+                onChange={(e) => setReportMeta((m) => ({ ...m, title: e.target.value }))}
+              />
+            </label>
+            <label className="mt-3 block text-xs font-medium tracking-wide text-muted-foreground">
+              Profesional
+              <Input
+                className="mt-1.5"
+                placeholder="Nombre del/de la profesional"
+                value={reportMeta.professional}
+                onChange={(e) => setReportMeta((m) => ({ ...m, professional: e.target.value }))}
+              />
+            </label>
+            <label className="mt-3 block text-xs font-medium tracking-wide text-muted-foreground">
+              Fecha
+              <Input
+                type="date"
+                className="mt-1.5"
+                value={reportMeta.date}
+                onChange={(e) => setReportMeta((m) => ({ ...m, date: e.target.value }))}
+              />
+            </label>
+            <label className="mt-3 block text-xs font-medium tracking-wide text-muted-foreground">
+              Notas breves (opcional)
+              <Textarea
+                className="mt-1.5"
+                rows={2}
+                placeholder="Motivo de consulta, observación clínica…"
+                value={reportMeta.notes}
+                onChange={(e) => setReportMeta((m) => ({ ...m, notes: e.target.value }))}
+              />
+            </label>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setReportOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">
+                <Download /> Descargar informe
+              </Button>
+            </div>
+          </form>
+        </div>
+      ) : null}
 
       <nav className="grid h-12 shrink-0 grid-cols-2 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:hidden">
         <button

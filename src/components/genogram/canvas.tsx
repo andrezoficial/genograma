@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode, type RefObject } from "react";
-import { Link2, Maximize2, Minus, Plus, UserPlus, Users } from "lucide-react";
+import { ChevronDown, Link2, Maximize2, Minus, Plus, UserPlus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PARENT_TYPES, REL_LABELS, UNION_TYPES, personYears, type Gender, type Person, type RelType, type Relationship } from "@/lib/genogram/types";
@@ -8,11 +8,12 @@ import { cn } from "@/lib/utils";
 
 const INK = "#231e18";
 const MUTED = "#6a6258";
-const MALE = "#dce6e1";
-const FEMALE = "#ead9cc";
-const UNKNOWN = "#e2d9cc";
-const DECEASED = "#cfc4b4";
+const MALE = "#c2d6ca";
+const FEMALE = "#e8c1a3";
+const UNKNOWN = "#e3dcc9";
+const DECEASED = "#a99d8a";
 const ACCENT = "#2a332c";
+const IP_RING = "#8a5a3c";
 const TYPEFACE = "Source Sans 3, Segoe UI, sans-serif";
 const HALF = 18;
 
@@ -295,11 +296,26 @@ function PersonMark({
       <rect x={-30} y={-30} width={60} height={78} fill="transparent" />
       {person.identifiedPatient ? (
         person.gender === "female" ? (
-          <circle r={HALF + 5} fill="none" stroke={stroke} strokeWidth={1.4} />
+          <circle r={HALF + 6} fill="none" stroke={IP_RING} strokeWidth={2} strokeDasharray="2 3" />
         ) : person.gender === "unknown" ? (
-          <polygon points={`0,${-HALF - 6} ${HALF + 6},${HALF + 4} ${-HALF - 6},${HALF + 4}`} fill="none" stroke={stroke} />
+          <polygon
+            points={`0,${-HALF - 7} ${HALF + 7},${HALF + 5} ${-HALF - 7},${HALF + 5}`}
+            fill="none"
+            stroke={IP_RING}
+            strokeWidth={2}
+            strokeDasharray="2 3"
+          />
         ) : (
-          <rect x={-HALF - 5} y={-HALF - 5} width={HALF * 2 + 10} height={HALF * 2 + 10} fill="none" stroke={stroke} strokeWidth={1.4} />
+          <rect
+            x={-HALF - 6}
+            y={-HALF - 6}
+            width={HALF * 2 + 12}
+            height={HALF * 2 + 12}
+            fill="none"
+            stroke={IP_RING}
+            strokeWidth={2}
+            strokeDasharray="2 3"
+          />
         )
       ) : null}
       {person.gender === "female" ? (
@@ -316,15 +332,16 @@ function PersonMark({
       )}
       {person.deceased ? (
         <>
-          <line x1={-12} y1={-12} x2={12} y2={12} stroke={MUTED} strokeWidth={2} />
-          <line x1={12} y1={-12} x2={-12} y2={12} stroke={MUTED} strokeWidth={2} />
+          <line x1={-12} y1={-12} x2={12} y2={12} stroke={INK} strokeWidth={2.2} />
+          <line x1={12} y1={-12} x2={-12} y2={12} stroke={INK} strokeWidth={2.2} />
         </>
       ) : null}
       <text
-        y={HALF + 16}
+        y={HALF + 17}
         textAnchor="middle"
-        fontSize={13}
-        fontWeight={600}
+        fontSize={13.5}
+        fontWeight={700}
+        letterSpacing={0.1}
         fill={INK}
         fontFamily={TYPEFACE}
       >
@@ -332,18 +349,20 @@ function PersonMark({
       </text>
       {years ? (
         <text
-          y={HALF + 31}
+          y={HALF + 32}
           textAnchor="middle"
-          fontSize={11}
+          fontSize={10.5}
+          fontWeight={600}
+          letterSpacing={0.3}
           fill={MUTED}
           fontFamily={TYPEFACE}
         >
-          {years}
+          {years.toUpperCase()}
         </text>
       ) : null}
       {person.occupation ? (
         <text
-          y={HALF + (years ? 44 : 31)}
+          y={HALF + (years ? 45 : 32)}
           textAnchor="middle"
           fontSize={10}
           fill={MUTED}
@@ -373,6 +392,7 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
   const viewRef = useRef(view);
   viewRef.current = view;
   const [tool, setTool] = useState<Tool>("select");
+  const [legendOpen, setLegendOpen] = useState(true);
   const [linkFrom, setLinkFrom] = useState<string | null>(null);
   const [linkMenu, setLinkMenu] = useState<{ a: string; b: string } | null>(null);
   const [draft, setDraft] = useState<{ x: number; y: number; name: string; gender: Gender } | null>(null);
@@ -783,16 +803,47 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
         </div>
       ) : null}
 
-      <div className={cn("absolute bottom-3 left-3 z-10 hidden rounded-xl bg-card/95 p-3 text-[11px] text-muted-foreground shadow-[var(--shadow-border)] sm:block")}>
-        <div className="mb-1.5 font-semibold uppercase tracking-[0.08em] text-foreground/70">Leyenda</div>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-          <span className="flex items-center gap-2"><span className="inline-block size-3 border-2 border-ink bg-male" /> Hombre</span>
-          <span className="flex items-center gap-2"><span className="inline-block size-3 rounded-full border-2 border-ink bg-female" /> Mujer</span>
-          <span className="flex items-center gap-2"><span className="relative inline-block size-3 border-2 border-ink bg-deceased after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-[10px] after:content-['×']" /> Fallecido</span>
-          <span className="flex items-center gap-2"><span className="h-0 w-4 border-t-2 border-ink" /> Matrimonio</span>
-          <span className="flex items-center gap-2"><span className="h-0 w-4 border-t-2 border-dashed border-ink" /> Unión / sep.</span>
-          <span className="flex items-center gap-2"><span className="h-0 w-4 border-t-2 border-ink" /> Hijos</span>
-        </div>
+      <div className="absolute bottom-3 left-3 z-10 hidden w-[268px] overflow-hidden rounded-xl border border-border bg-card/98 text-[11px] text-muted-foreground shadow-[var(--shadow-border)] sm:block">
+        <button
+          type="button"
+          onClick={() => setLegendOpen((v) => !v)}
+          className="flex w-full items-center justify-between px-3 py-2 font-semibold tracking-[0.08em] text-foreground/75 uppercase"
+        >
+          Leyenda clínica
+          <ChevronDown className={cn("size-3.5 transition-transform", legendOpen ? "rotate-180" : "")} />
+        </button>
+        {legendOpen ? (
+          <div className="space-y-2.5 border-t border-border px-3 py-2.5">
+            <div>
+              <div className="mb-1 text-[10px] font-semibold tracking-[0.06em] text-foreground/55 uppercase">Personas</div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                <span className="flex items-center gap-2"><span className="inline-block size-3 border-2 border-ink bg-male" /> Hombre</span>
+                <span className="flex items-center gap-2"><span className="inline-block size-3 rounded-full border-2 border-ink bg-female" /> Mujer</span>
+                <span className="flex items-center gap-2"><span className="relative inline-block size-3 border-2 border-ink bg-unknown" /> Género s/d</span>
+                <span className="flex items-center gap-2"><span className="relative inline-block size-3 border-2 border-ink bg-deceased after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-[9px] after:leading-none after:text-card after:content-['×']" /> Fallecido/a</span>
+                <span className="col-span-2 flex items-center gap-2"><span className="inline-block size-3 rounded-full border-2 border-dashed" style={{ borderColor: "#8a5a3c" }} /> Paciente identificado</span>
+              </div>
+            </div>
+            <div>
+              <div className="mb-1 text-[10px] font-semibold tracking-[0.06em] text-foreground/55 uppercase">Vínculos familiares</div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                <span className="flex items-center gap-2"><span className="h-0 w-4 border-t-2 border-ink" /> Matrimonio</span>
+                <span className="flex items-center gap-2"><span className="h-0 w-4 border-t-2 border-dashed border-ink" /> Unión / sep.</span>
+                <span className="flex items-center gap-2"><span className="h-0 w-4 border-t-2 border-ink" /> Hijos</span>
+                <span className="flex items-center gap-2"><span className="h-0 w-4 border-t-2 border-dashed border-ink" /> Adopción</span>
+              </div>
+            </div>
+            <div>
+              <div className="mb-1 text-[10px] font-semibold tracking-[0.06em] text-foreground/55 uppercase">Vínculos emocionales</div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                <span className="flex items-center gap-2"><span className="flex h-2.5 w-4 flex-col justify-between"><span className="h-0 border-t border-ink" /><span className="h-0 border-t border-ink" /><span className="h-0 border-t border-ink" /></span> Cercana</span>
+                <span className="flex items-center gap-2"><span className="h-0 w-4 border-t border-dotted border-ink" /> Distante</span>
+                <span className="flex items-center gap-2"><span className="h-0 w-4 border-t-2 border-ink" style={{ borderTopStyle: "double" }} /> Corte</span>
+                <span className="flex items-center gap-2"><span className="inline-block w-4 text-center leading-none text-ink">⚡︎</span> Conflicto</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

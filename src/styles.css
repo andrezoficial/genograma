@@ -29,10 +29,11 @@
   --color-ink: #231e18;
   --color-bar: #2a332c;
   --color-bar-foreground: #ece4d6;
-  --color-male: #dce6e1;
-  --color-female: #ead9cc;
-  --color-unknown: #e2d9cc;
-  --color-deceased: #cfc4b4;
+  --color-male: #c2d6ca;
+  --color-female: #e8c1a3;
+  --color-unknown: #e3dcc9;
+  --color-deceased: #a99d8a;
+  --color-ip-ring: #8a5a3c;
 
   --radius-sm: 4px;
   --radius-md: 8px;
