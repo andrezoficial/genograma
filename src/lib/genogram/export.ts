@@ -1,3 +1,5 @@
+import { glyphSpec, LEGEND_GROUPS, type LegendKind } from "./legend.ts";
+
 export type ReportMeta = {
   title: string;
   professional: string;
@@ -5,20 +7,28 @@ export type ReportMeta = {
   notes: string;
 };
 
-const REPORT_LEGEND: Array<{ label: string; kind: "square" | "circle" | "deceased" | "line" | "dashed" | "double" | "zigzag" }> = [
-  { label: "Hombre", kind: "square" },
-  { label: "Mujer", kind: "circle" },
-  { label: "Fallecido/a", kind: "deceased" },
-  { label: "Matrimonio", kind: "double" },
-  { label: "Unión / separación", kind: "dashed" },
-  { label: "Corte relacional", kind: "double" },
-  { label: "Conflicto", kind: "zigzag" },
-];
-
 function svgEl<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>) {
   const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
   return el;
+}
+
+function appendGlyph(parent: SVGElement, kind: LegendKind, x: number, y: number) {
+  const spec = glyphSpec(kind);
+  const g = svgEl("g", { transform: `translate(${x} ${y - spec.height / 2})` });
+  const inner = svgEl("svg", {
+    x: 0,
+    y: 0,
+    width: spec.width,
+    height: spec.height,
+    viewBox: spec.viewBox,
+  });
+  for (const el of spec.els) {
+    inner.appendChild(svgEl(el.tag, el.attrs));
+  }
+  g.appendChild(inner);
+  parent.appendChild(g);
+  return spec.width;
 }
 
 /**
@@ -32,7 +42,7 @@ export function buildReportSvg(
   meta: ReportMeta,
 ): SVGSVGElement {
   const HEADER_H = 108;
-  const LEGEND_H = 96;
+  const LEGEND_H = 168;
   const FOOTER_H = 34;
   const totalH = HEADER_H + box.height + LEGEND_H + FOOTER_H;
   const ink = "#231e18";
@@ -79,7 +89,7 @@ export function buildReportSvg(
     out.appendChild(clonedWorld);
   }
 
-  const legendY = box.minY + box.height + 30;
+  const legendY = box.minY + box.height + 22;
   const legendLabel = svgEl("text", {
     x: left,
     y: legendY,
@@ -92,29 +102,32 @@ export function buildReportSvg(
   legendLabel.textContent = "LEYENDA";
   out.appendChild(legendLabel);
 
+  const maxX = box.minX + box.width - 28;
   let lx = left;
-  const ly = legendY + 24;
-  for (const item of REPORT_LEGEND) {
-    if (item.kind === "square") {
-      out.appendChild(svgEl("rect", { x: lx, y: ly - 8, width: 16, height: 16, fill: "#c2d6ca", stroke: ink, "stroke-width": 1.5 }));
-    } else if (item.kind === "circle") {
-      out.appendChild(svgEl("circle", { cx: lx + 8, cy: ly, r: 8, fill: "#e8c1a3", stroke: ink, "stroke-width": 1.5 }));
-    } else if (item.kind === "deceased") {
-      out.appendChild(svgEl("rect", { x: lx, y: ly - 8, width: 16, height: 16, fill: "#a99d8a", stroke: ink, "stroke-width": 1.5 }));
-      out.appendChild(svgEl("line", { x1: lx + 3, y1: ly - 5, x2: lx + 13, y2: ly + 5, stroke: paper, "stroke-width": 1.6 }));
-      out.appendChild(svgEl("line", { x1: lx + 13, y1: ly - 5, x2: lx + 3, y2: ly + 5, stroke: paper, "stroke-width": 1.6 }));
-    } else if (item.kind === "double") {
-      out.appendChild(svgEl("line", { x1: lx, y1: ly - 2, x2: lx + 16, y2: ly - 2, stroke: ink, "stroke-width": 1.6 }));
-      out.appendChild(svgEl("line", { x1: lx, y1: ly + 2, x2: lx + 16, y2: ly + 2, stroke: ink, "stroke-width": 1.6 }));
-    } else if (item.kind === "dashed") {
-      out.appendChild(svgEl("line", { x1: lx, y1: ly, x2: lx + 16, y2: ly, stroke: ink, "stroke-width": 1.6, "stroke-dasharray": "4 3" }));
-    } else if (item.kind === "zigzag") {
-      out.appendChild(svgEl("path", { d: `M ${lx} ${ly + 5} L ${lx + 4} ${ly - 5} L ${lx + 8} ${ly + 5} L ${lx + 12} ${ly - 5} L ${lx + 16} ${ly + 5}`, fill: "none", stroke: ink, "stroke-width": 1.6 }));
+  let ly = legendY + 22;
+  const colGap = 16;
+
+  for (const group of LEGEND_GROUPS) {
+    for (const item of group.items) {
+      const spec = glyphSpec(item.kind);
+      const labelW = item.label.length * 6.2;
+      const need = spec.width + 6 + labelW + colGap;
+      if (lx + need > maxX && lx > left) {
+        lx = left;
+        ly += 22;
+      }
+      appendGlyph(out, item.kind, lx, ly);
+      const label = svgEl("text", {
+        x: lx + spec.width + 6,
+        y: ly + 4,
+        "font-family": font,
+        "font-size": 11,
+        fill: ink,
+      });
+      label.textContent = item.label;
+      out.appendChild(label);
+      lx += need;
     }
-    const label = svgEl("text", { x: lx + 22, y: ly + 4, "font-family": font, "font-size": 11.5, fill: ink });
-    label.textContent = item.label;
-    out.appendChild(label);
-    lx += 22 + item.label.length * 6.4 + 22;
   }
 
   const footerY = box.minY + box.height + LEGEND_H + FOOTER_H - 10;

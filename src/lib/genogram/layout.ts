@@ -1,4 +1,4 @@
-import { PARENT_TYPES, UNION_TYPES, type Person, type Relationship } from "./types.ts";
+import { PARENT_TYPES, UNION_TYPES, personCaptionDepth, type Person, type Relationship } from "./types.ts";
 
 const COL = 128;
 const ROW = 158;
@@ -175,11 +175,32 @@ export function boundingBox(persons: Person[], pad = 80, minW = 0, minH = 0) {
     minY = Infinity,
     maxY = -Infinity;
   for (const p of persons) {
-    minX = Math.min(minX, p.x - 28);
-    maxX = Math.max(maxX, p.x + 28);
+    minX = Math.min(minX, p.x - 36);
+    maxX = Math.max(maxX, p.x + 36);
     minY = Math.min(minY, p.y - 28);
-    maxY = Math.max(maxY, p.y + 58);
+    maxY = Math.max(maxY, p.y + personCaptionDepth(p));
   }
+  const groups = new Map<number, Person[]>();
+  for (const p of persons) {
+    if (p.household == null) continue;
+    const arr = groups.get(p.household) ?? [];
+    arr.push(p);
+    groups.set(p.household, arr);
+  }
+  groups.forEach((members) => {
+    const hx0 = Math.min(...members.map((p) => p.x));
+    const hx1 = Math.max(...members.map((p) => p.x));
+    const hy0 = Math.min(...members.map((p) => p.y));
+    const hy1 = Math.max(...members.map((p) => p.y));
+    const cx = (hx0 + hx1) / 2;
+    const cy = (hy0 + hy1) / 2;
+    const rx = (hx1 - hx0) / 2 + 46;
+    const ry = (hy1 - hy0) / 2 + 60;
+    minX = Math.min(minX, cx - rx);
+    maxX = Math.max(maxX, cx + rx);
+    minY = Math.min(minY, cy - ry - 22);
+    maxY = Math.max(maxY, cy + ry);
+  });
   return {
     minX: minX - pad,
     minY: minY - pad,

@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { emptyPerson, type Gender, type GenogramData, type RelType } from "./types.ts";
+import { DEFAULT_HOUSEHOLD_LABEL, emptyPerson, type Gender, type GenogramData, type RelType } from "./types.ts";
 import { inferGenderFromName } from "./gender.ts";
 
 const REL_TYPES: RelType[] = [
@@ -26,6 +26,7 @@ type AiPerson = {
   occupation?: string;
   notes?: string;
   identifiedPatient?: boolean;
+  household?: number | null;
 };
 
 type AiRel = {
@@ -60,6 +61,7 @@ function mapAi(persons: AiPerson[], rels: AiRel[]): GenogramData {
         occupation: p.occupation ?? "",
         notes: p.notes ?? "",
         identifiedPatient: Boolean(p.identifiedPatient),
+        household: typeof p.household === "number" ? p.household : null,
       });
     })
     .filter((p): p is NonNullable<typeof p> => p != null);
@@ -73,7 +75,14 @@ function mapAi(persons: AiPerson[], rels: AiRel[]): GenogramData {
     if (!a || !b || !type || a === b) continue;
     outRels.push({ id: `r${ri++}`, type, a, b });
   }
-  return { persons: outPersons, relationships: outRels };
+  const usedHouseholds = [
+    ...new Set(outPersons.map((p) => p.household).filter((n): n is number => n != null)),
+  ].sort((a, c) => a - c);
+  return {
+    persons: outPersons,
+    relationships: outRels,
+    households: usedHouseholds.map((id) => ({ id, label: DEFAULT_HOUSEHOLD_LABEL })),
+  };
 }
 
 export const parseFamilyWithAi = createServerFn({ method: "POST" })
@@ -107,7 +116,7 @@ export const parseFamilyWithAi = createServerFn({ method: "POST" })
             {
               role: "system",
               content:
-                "Eres un experto en genogramas clínicos. Extrae personas y vínculos de una descripción familiar en español. Responde SOLO JSON válido con esta forma: {\"persons\":[{\"name\",\"gender\":\"male|female|unknown\",\"age\":null,\"birthYear\":null,\"deathYear\":null,\"deceased\":false,\"occupation\":\"\",\"notes\":\"\",\"identifiedPatient\":false}],\"relationships\":[{\"type\":\"marriage|cohabitation|separation|divorce|parent_child|adopted|sibling|close|distant|cutoff|conflict\",\"from\":\"Nombre\",\"to\":\"Nombre\"}]}. En parent_child, from es el progenitor y to el hijo. No inventes gente que no esté en el texto. Si un hermano comparte padres, incluye también parent_child a esos padres.",
+                "Eres un experto en genogramas clínicos. Extrae personas y vínculos de una descripción familiar en español. Responde SOLO JSON válido con esta forma: {\"persons\":[{\"name\",\"gender\":\"male|female|unknown\",\"age\":null,\"birthYear\":null,\"deathYear\":null,\"deceased\":false,\"occupation\":\"\",\"notes\":\"\",\"identifiedPatient\":false,\"household\":null}],\"relationships\":[{\"type\":\"marriage|cohabitation|separation|divorce|parent_child|adopted|sibling|close|distant|cutoff|conflict\",\"from\":\"Nombre\",\"to\":\"Nombre\"}]}. En parent_child, from es el progenitor y to el hijo. No inventes gente que no esté en el texto. Si un hermano comparte padres, incluye también parent_child a esos padres. Si el texto dice que conviven o viven juntos, pon el mismo número entero en household (empezando en 1) a quienes viven en el mismo núcleo. identifiedPatient true solo para quien el texto marca como paciente identificado o consultante.",
             },
             { role: "user", content: data.text },
           ],

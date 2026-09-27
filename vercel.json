@@ -1,11 +1,3 @@
 {
-  "installCommand": "npm install --omit=dev --no-audit --no-fund",
-  "build": {
-    "env": {
-      "VITE_AUTH_ENABLED": "false"
-    }
-  },
-  "env": {
-    "VITE_AUTH_ENABLED": "false"
-  }
+  "installCommand": "npm install --omit=dev --no-audit --no-fund"
 }

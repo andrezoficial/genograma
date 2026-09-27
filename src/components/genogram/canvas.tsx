@@ -6,15 +6,20 @@ import {
   PARENT_TYPES,
   REL_LABELS,
   UNION_TYPES,
+  personCaptionDepth,
   personYears,
+  splitDisplayName,
   type Gender,
   type Household,
   type Person,
   type RelType,
   type Relationship,
 } from "@/lib/genogram/types";
+import { boundingBox } from "@/lib/genogram/layout";
 import { useGenogram } from "@/lib/genogram/store";
+import { LEGEND_GROUPS } from "@/lib/genogram/legend";
 import { cn } from "@/lib/utils";
+import { LegendGlyph } from "./legend-glyphs";
 
 const INK = "#231e18";
 const MUTED = "#6a6258";
@@ -353,13 +358,19 @@ function PersonMark({
   const stroke = linking ? ACCENT : selected ? ACCENT : INK;
   const sw = linking || selected ? 2.6 : 2;
   const years = personYears(person);
+  const nameLines = splitDisplayName(person.name);
+  const nameSize = nameLines.length > 1 || (nameLines[0]?.length ?? 0) > 10 ? 12 : 13.5;
+  const nameY = HALF + 16;
+  const yearsY = nameY + nameLines.length * 13 + 2;
+  const occY = yearsY + (years ? 13 : 0);
+  const hitH = personCaptionDepth(person) + 30;
   return (
     <g
       transform={`translate(${person.x} ${person.y})`}
       onPointerDown={onPointerDown}
       style={{ cursor: linking ? "pointer" : "grab" }}
     >
-      <rect x={-30} y={-30} width={60} height={78} fill="transparent" />
+      <rect x={-36} y={-30} width={72} height={hitH} fill="transparent" />
       {person.identifiedPatient ? (
         person.gender === "female" ? (
           <circle r={HALF + 6} fill="none" stroke={IP_RING} strokeWidth={2} strokeDasharray="2 3" />
@@ -403,19 +414,23 @@ function PersonMark({
         </>
       ) : null}
       <text
-        y={HALF + 17}
+        y={nameY}
         textAnchor="middle"
-        fontSize={13.5}
+        fontSize={nameSize}
         fontWeight={700}
         letterSpacing={0.1}
         fill={INK}
         fontFamily={TYPEFACE}
       >
-        {person.name}
+        {nameLines.map((line, i) => (
+          <tspan key={i} x={0} dy={i === 0 ? 0 : 13}>
+            {line}
+          </tspan>
+        ))}
       </text>
       {years ? (
         <text
-          y={HALF + 32}
+          y={yearsY}
           textAnchor="middle"
           fontSize={10.5}
           fontWeight={600}
@@ -428,14 +443,14 @@ function PersonMark({
       ) : null}
       {person.occupation ? (
         <text
-          y={HALF + (years ? 45 : 32)}
+          y={occY}
           textAnchor="middle"
           fontSize={10}
           fill={MUTED}
           fontStyle="italic"
           fontFamily={TYPEFACE}
         >
-          {person.occupation}
+          {person.occupation.length > 18 ? `${person.occupation.slice(0, 17)}…` : person.occupation}
         </text>
       ) : null}
     </g>
@@ -494,27 +509,18 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
     const w = el.clientWidth;
     const h = el.clientHeight;
     if (w < 40 || h < 40) return;
-    let minX = Infinity,
-      maxX = -Infinity,
-      minY = Infinity,
-      maxY = -Infinity;
-    for (const p of persons) {
-      minX = Math.min(minX, p.x - 36);
-      maxX = Math.max(maxX, p.x + 36);
-      minY = Math.min(minY, p.y - 28);
-      maxY = Math.max(maxY, p.y + 58);
-    }
+    const box = boundingBox(persons, 28, 80, 80);
     const toolW = 56;
     const pad = 16;
     const availW = Math.max(80, w - pad * 2 - toolW);
     const availH = Math.max(80, h - pad * 2);
-    const bw = Math.max(80, maxX - minX);
-    const bh = Math.max(80, maxY - minY);
-    const k = Math.min(availW / bw, availH / bh, 1.6);
+    const k = Math.min(availW / box.width, availH / box.height, 1.45);
+    const cx = box.minX + box.width / 2;
+    const cy = box.minY + box.height / 2;
     setView({
       k,
-      x: pad + availW / 2 - ((minX + maxX) / 2) * k,
-      y: pad + availH / 2 - ((minY + maxY) / 2) * k,
+      x: pad + availW / 2 - cx * k,
+      y: pad + availH / 2 - cy * k,
     });
   };
 
@@ -884,7 +890,7 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
         </div>
       ) : null}
 
-      <div className="absolute bottom-3 left-3 z-10 hidden w-[268px] overflow-hidden rounded-xl border border-border bg-card/98 text-[11px] text-muted-foreground shadow-[var(--shadow-border)] sm:block">
+      <div className="absolute bottom-3 left-3 z-10 hidden w-[280px] overflow-hidden rounded-xl border border-border bg-card/98 text-[11px] text-muted-foreground shadow-[var(--shadow-border)] sm:block">
         <button
           type="button"
           onClick={() => setLegendOpen((v) => !v)}
@@ -895,40 +901,25 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
         </button>
         {legendOpen ? (
           <div className="space-y-2.5 border-t border-border px-3 py-2.5">
-            <div>
-              <div className="mb-1 text-[10px] font-semibold tracking-[0.06em] text-foreground/55 uppercase">Personas</div>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                <span className="flex items-center gap-2"><span className="inline-block size-3 border-2 border-ink bg-male" /> Hombre</span>
-                <span className="flex items-center gap-2"><span className="inline-block size-3 rounded-full border-2 border-ink bg-female" /> Mujer</span>
-                <span className="flex items-center gap-2"><span className="relative inline-block size-3 border-2 border-ink bg-unknown" /> Género s/d</span>
-                <span className="flex items-center gap-2"><span className="relative inline-block size-3 border-2 border-ink bg-deceased after:absolute after:inset-0 after:flex after:items-center after:justify-center after:text-[9px] after:leading-none after:text-card after:content-['×']" /> Fallecido/a</span>
-                <span className="col-span-2 flex items-center gap-2"><span className="inline-block size-3 rounded-full border-2 border-dashed" style={{ borderColor: "#8a5a3c" }} /> Paciente identificado</span>
+            {LEGEND_GROUPS.map((group) => (
+              <div key={group.title}>
+                <div className="mb-1 text-[10px] font-semibold tracking-[0.06em] text-foreground/55 uppercase">{group.title}</div>
+                <div className={group.items.length === 1 ? "grid grid-cols-1 gap-1.5" : "grid grid-cols-2 gap-x-3 gap-y-1.5"}>
+                  {group.items.map((item) => (
+                    <span
+                      key={item.kind}
+                      className={cn(
+                        "flex items-center gap-2",
+                        item.kind === "ip" || item.kind === "household" ? "col-span-2" : "",
+                      )}
+                    >
+                      <LegendGlyph kind={item.kind} />
+                      {item.label}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div>
-              <div className="mb-1 text-[10px] font-semibold tracking-[0.06em] text-foreground/55 uppercase">Convivencia</div>
-              <div className="grid grid-cols-1 gap-1.5">
-                <span className="flex items-center gap-2"><span className="inline-block h-3.5 w-5 rounded-full border-2 border-dashed" style={{ borderColor: "#5b6b5e" }} /> Núcleo familiar (viven juntos)</span>
-              </div>
-            </div>
-            <div>
-              <div className="mb-1 text-[10px] font-semibold tracking-[0.06em] text-foreground/55 uppercase">Vínculos familiares</div>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                <span className="flex items-center gap-2"><span className="h-0 w-4 border-t-2 border-ink" /> Matrimonio</span>
-                <span className="flex items-center gap-2"><span className="h-0 w-4 border-t-2 border-dashed border-ink" /> Unión / sep.</span>
-                <span className="flex items-center gap-2"><span className="h-0 w-4 border-t-2 border-ink" /> Hijos</span>
-                <span className="flex items-center gap-2"><span className="h-0 w-4 border-t-2 border-dashed border-ink" /> Adopción</span>
-              </div>
-            </div>
-            <div>
-              <div className="mb-1 text-[10px] font-semibold tracking-[0.06em] text-foreground/55 uppercase">Vínculos emocionales</div>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                <span className="flex items-center gap-2"><span className="flex h-2.5 w-4 flex-col justify-between"><span className="h-0 border-t border-ink" /><span className="h-0 border-t border-ink" /><span className="h-0 border-t border-ink" /></span> Cercana</span>
-                <span className="flex items-center gap-2"><span className="h-0 w-4 border-t border-dotted border-ink" /> Distante</span>
-                <span className="flex items-center gap-2"><span className="h-0 w-4 border-t-2 border-ink" style={{ borderTopStyle: "double" }} /> Corte</span>
-                <span className="flex items-center gap-2"><span className="inline-block w-4 text-center leading-none text-ink">⚡︎</span> Conflicto</span>
-              </div>
-            </div>
+            ))}
           </div>
         ) : null}
       </div>

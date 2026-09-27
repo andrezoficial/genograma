@@ -32,6 +32,7 @@ test("example family has seven people and core ties", () => {
   assert.equal(data.persons.find((p) => p.name === "José")?.deathYear, 2018);
   assert.equal(data.persons.find((p) => p.name === "María")?.gender, "female");
   assert.equal(data.persons.find((p) => p.name === "Juan")?.gender, "male");
+  assert.equal(data.persons.find((p) => p.name === "María")?.identifiedPatient, true);
   assert.ok(hasRel(data, "marriage", "María", "Juan"));
   assert.ok(hasRel(data, "marriage", "Carmen", "José"));
   assert.ok(parentOf(data, "María", "Laura"));
@@ -39,6 +40,11 @@ test("example family has seven people and core ties", () => {
   assert.ok(parentOf(data, "Carmen", "María"));
   assert.ok(parentOf(data, "José", "Ana"));
   assert.ok(hasRel(data, "sibling", "María", "Ana"));
+  const nucleo = data.persons.filter((p) => ["María", "Juan", "Laura", "Pedro"].includes(p.name));
+  assert.ok(nucleo.every((p) => p.household != null));
+  assert.equal(new Set(nucleo.map((p) => p.household)).size, 1);
+  assert.equal(data.persons.find((p) => p.name === "Ana")?.household, null);
+  assert.ok((data.households ?? []).length >= 1);
 });
 
 test("empty text yields nothing", () => {
@@ -116,4 +122,17 @@ test("widowhood marks the deceased spouse", () => {
   const data = parseFamilyText("Carmen es viuda de José.");
   assert.ok(hasRel(data, "marriage", "Carmen", "José"));
   assert.equal(data.persons.find((p) => p.name === "José")?.deceased, true);
+});
+
+test("household list includes every named person", () => {
+  const data = parseFamilyText("María, Juan, Laura y Pedro viven juntos.");
+  const nucleo = data.persons.filter((p) => ["María", "Juan", "Laura", "Pedro"].includes(p.name));
+  assert.equal(nucleo.length, 4);
+  assert.ok(nucleo.every((p) => p.household != null));
+  assert.equal(new Set(nucleo.map((p) => p.household)).size, 1);
+});
+
+test("identified patient feminine form", () => {
+  const data = parseFamilyText("Laura de 15 años. Laura es la paciente identificada.");
+  assert.equal(data.persons.find((p) => p.name === "Laura")?.identifiedPatient, true);
 });

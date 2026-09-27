@@ -1,4 +1,5 @@
 import {
+  DEFAULT_HOUSEHOLD_LABEL,
   emptyPerson,
   PARENT_TYPES,
   UNION_TYPES,
@@ -239,7 +240,9 @@ export const EXAMPLE_TEXT = `María de 45 años está casada con Juan de 48.
 Tienen dos hijos: Laura de 15 y Pedro de 12.
 Los padres de María se llaman Carmen y José.
 José falleció en 2018.
-María tiene una hermana llamada Ana.`;
+María tiene una hermana llamada Ana.
+María es la paciente identificada.
+María, Juan, Laura y Pedro viven juntos.`;
 
 type Builder = {
   persons: Person[];
@@ -461,7 +464,7 @@ export function parseFamilyText(text: string): GenogramData {
     const deathYear = deathYearMatch ? Number(deathYearMatch[1] || deathYearMatch[2] || deathYearMatch[3]) : null;
     const birthYearMatch = lower.match(/naci[oó]\s+en\s+(\d{4})/);
     const birthYear = birthYearMatch ? Number(birthYearMatch[1]) : null;
-    const identified = /paciente identificado|consultante|caso índice|caso indice/.test(lower);
+    const identified = /paciente identificad[oa]|consultante|caso [ií]ndice/.test(lower);
 
     let m: RegExpMatchArray | null;
 
@@ -573,12 +576,12 @@ export function parseFamilyText(text: string): GenogramData {
     }
 
     // "X y Y viven juntos", "X, Y y Z conviven", "viven en la misma casa" → same household circle.
-    const householdListRe = new RegExp(
-      `(${NAME})(?:\\s*,\\s*(${NAME}))*\\s+(?:y|e)\\s+(${NAME})\\s+(?:viven\\s+junt[oa]s|conviven|viven\\s+en\\s+la\\s+misma\\s+casa)`,
+    const householdLeadRe = new RegExp(
+      `^((?:${NAME}\\s*,\\s*)*${NAME}\\s+(?:y|e)\\s+${NAME})\\s+(?:viven\\s+junt[oa]s|conviven|viven\\s+en\\s+la\\s+misma\\s+casa)`,
       "iu",
     );
-    if ((m = sentence.match(householdListRe))) {
-      const names = [m[1], m[2], m[3]].filter(Boolean).map((n) => cleanName(n)).filter(Boolean);
+    if ((m = sentence.match(householdLeadRe))) {
+      const names = parseNamedPeople(m[1]).map((n) => n.name);
       linkHousehold(
         b,
         names.map((n) => getOrCreate(b, n)),
@@ -873,5 +876,13 @@ export function parseFamilyText(text: string): GenogramData {
     );
   }
 
-  return { persons: b.persons, relationships: b.relationships };
+  const usedHouseholds = [
+    ...new Set(b.persons.map((p) => p.household).filter((n): n is number => n != null)),
+  ].sort((a, c) => a - c);
+
+  return {
+    persons: b.persons,
+    relationships: b.relationships,
+    households: usedHouseholds.map((id) => ({ id, label: DEFAULT_HOUSEHOLD_LABEL })),
+  };
 }

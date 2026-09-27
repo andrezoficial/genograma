@@ -94,7 +94,28 @@ export function emptyPerson(partial: Partial<Person> & { id: string; name: strin
 export function personYears(p: Person): string {
   if (p.birthYear && p.deathYear) return `${p.birthYear}–${p.deathYear}`;
   if (p.deathYear) return `† ${p.deathYear}`;
+  if (p.deceased && p.age != null) return `${p.age} años`;
   if (p.age != null) return `${p.age} años`;
   if (p.birthYear) return `${p.birthYear}–`;
   return "";
 }
+
+/** Split a long given name so it stays under the 36px-wide gender mark. */
+export function splitDisplayName(name: string): string[] {
+  const t = name.trim();
+  if (!t) return [""];
+  if (t.length <= 11) return [t];
+  const parts = t.split(/\s+/);
+  if (parts.length < 2) return [t];
+  if (parts.length === 2) return [parts[0]!, parts[1]!];
+  return [parts[0]!, parts.slice(1).join(" ")];
+}
+
+export function personCaptionDepth(p: Person): number {
+  const lines = splitDisplayName(p.name).length;
+  let y = 18 + 16 + lines * 13;
+  if (personYears(p)) y += 14;
+  if (p.occupation) y += 13;
+  return y + 4;
+}
+

@@ -155,7 +155,7 @@ export function PersonInspector({ person }: { person: Person }) {
           checked={person.identifiedPatient}
           onChange={(e) => updatePerson(person.id, { identifiedPatient: e.target.checked })}
         />
-        Paciente identificado (doble trazo)
+        Paciente identificado (anillo punteado)
       </label>
       <div>
         <Label>Convivencia (con quién vive)</Label>

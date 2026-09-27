@@ -12,7 +12,7 @@ import {
   type Relationship,
 } from "./types.ts";
 
-const STORAGE_KEY = "genograma.v2";
+const STORAGE_KEY = "genograma.v3";
 
 type Snapshot = GenogramData;
 export type SidebarTab = "texto" | "manual" | "personas";
@@ -106,7 +106,9 @@ const DEMO = `María de 45 años está casada con Juan de 48.
 Tienen dos hijos: Laura de 15 y Pedro de 12.
 Los padres de María se llaman Carmen y José.
 José falleció en 2018.
-María tiene una hermana llamada Ana.`;
+María tiene una hermana llamada Ana.
+María es la paciente identificada.
+María, Juan, Laura y Pedro viven juntos.`;
 
 export const useGenogram = create<State>((set, get) => ({
   persons: [],
@@ -153,7 +155,7 @@ export const useGenogram = create<State>((set, get) => ({
     set({
       persons: autoLayout(parsed.persons, parsed.relationships),
       relationships: parsed.relationships,
-      households: [],
+      households: parsed.households ?? [],
       hydrated: true,
       epoch: 1,
       layoutEpoch: 1,

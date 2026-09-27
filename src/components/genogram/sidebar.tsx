@@ -122,7 +122,7 @@ export function Sidebar() {
               placeholder="María está casada con Juan. Tienen dos hijos: Laura y Pedro."
             />
             <p className="mb-3 mt-2 text-xs text-muted-foreground">
-              Nombres, edades, matrimonio, hijos, padres, fallecimiento, hermanos, conflicto. También vale en minúsculas o en primera persona («estoy casada», «tengo dos hijos»).
+              Nombres, edades, matrimonio, hijos, padres, fallecimiento, hermanos, convivencia, paciente identificado y conflicto. También vale en minúsculas o en primera persona («estoy casada», «tengo dos hijos»).
             </p>
             {preview.persons.length > 0 ? (
               <div className="mb-3 rounded-xl bg-secondary px-3 py-2 text-xs text-muted-foreground">
