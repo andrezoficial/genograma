@@ -4,9 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { REL_LABELS, type Gender, type Person } from "@/lib/genogram/types";
+import { DEFAULT_HOUSEHOLD_LABEL, REL_LABELS, type Gender, type Person } from "@/lib/genogram/types";
 import { useGenogram } from "@/lib/genogram/store";
-import { cn } from "@/lib/utils";
 
 const selectClass =
   "h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35";
@@ -17,6 +16,8 @@ export function PersonInspector({ person }: { person: Person }) {
   const removeRelationship = useGenogram((s) => s.removeRelationship);
   const relationships = useGenogram((s) => s.relationships);
   const persons = useGenogram((s) => s.persons);
+  const households = useGenogram((s) => s.households);
+  const setHouseholdLabel = useGenogram((s) => s.setHouseholdLabel);
   const checkpoint = useGenogram((s) => s.checkpoint);
   const [name, setName] = useState(person.name);
   const [occupation, setOccupation] = useState(person.occupation);
@@ -24,7 +25,8 @@ export function PersonInspector({ person }: { person: Person }) {
   const [age, setAge] = useState(person.age?.toString() ?? "");
   const [birthYear, setBirthYear] = useState(person.birthYear?.toString() ?? "");
   const [deathYear, setDeathYear] = useState(person.deathYear?.toString() ?? "");
-  const [household, setHousehold] = useState(person.household?.toString() ?? "");
+  const currentHouseholdLabel = households.find((h) => h.id === person.household)?.label ?? DEFAULT_HOUSEHOLD_LABEL;
+  const [householdLabel, setHouseholdLabelInput] = useState(currentHouseholdLabel);
 
   useEffect(() => {
     setName(person.name);
@@ -33,23 +35,23 @@ export function PersonInspector({ person }: { person: Person }) {
     setAge(person.age?.toString() ?? "");
     setBirthYear(person.birthYear?.toString() ?? "");
     setDeathYear(person.deathYear?.toString() ?? "");
-    setHousehold(person.household?.toString() ?? "");
-  }, [
-    person.id,
-    person.name,
-    person.occupation,
-    person.notes,
-    person.age,
-    person.birthYear,
-    person.deathYear,
-    person.household,
-  ]);
+    setHouseholdLabelInput(currentHouseholdLabel);
+  }, [person.id, person.name, person.occupation, person.notes, person.age, person.birthYear, person.deathYear, currentHouseholdLabel]);
 
   const related = relationships.filter((r) => r.a === person.id || r.b === person.id);
   const nameOf = (id: string) => persons.find((p) => p.id === id)?.name ?? id;
-  const householdOptions = Array.from(
+  const householdGroups = Array.from(
     new Set(persons.map((p) => p.household).filter((n): n is number => n != null)),
-  ).sort((a, b) => a - b);
+  )
+    .sort((a, b) => a - b)
+    .map((id) => ({ id, label: households.find((h) => h.id === id)?.label || DEFAULT_HOUSEHOLD_LABEL }))
+    .filter((g) => g.id !== person.household);
+
+  function assignToNewHousehold() {
+    const nextId = households.reduce((m, h) => Math.max(m, h.id), 0) + 1;
+    setHouseholdLabel(nextId, DEFAULT_HOUSEHOLD_LABEL);
+    updatePerson(person.id, { household: nextId });
+  }
 
   return (
     <div className="space-y-3">
@@ -156,46 +158,50 @@ export function PersonInspector({ person }: { person: Person }) {
         Paciente identificado (doble trazo)
       </label>
       <div>
-        <Label htmlFor="edit-household">Núcleo familiar (con quién vive)</Label>
-        <Input
-          id="edit-household"
-          inputMode="numeric"
-          placeholder="Nº de núcleo, ej. 1"
-          value={household}
-          onFocus={() => checkpoint()}
-          onChange={(e) => {
-            setHousehold(e.target.value);
-            const n = e.target.value === "" ? null : Number(e.target.value);
-            updatePerson(
-              person.id,
-              { household: n != null && Number.isFinite(n) ? n : null },
-              { history: false },
-            );
-          }}
-        />
+        <Label>Convivencia (con quién vive)</Label>
         <p className="mt-1 text-xs text-muted-foreground">
-          Asigna el mismo número a quienes conviven; se encierran en un círculo punteado en el mapa.
+          Usa el botón <strong>Vincular</strong> del mapa y elige «Viven juntos / conviven» entre dos personas para
+          encerrarlas en un círculo punteado. Aquí puedes ajustar el texto de la etiqueta o quitar a esta persona del
+          grupo.
         </p>
-        {householdOptions.length > 0 ? (
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {householdOptions.map((n) => (
+        {person.household != null ? (
+          <div className="mt-2 space-y-2">
+            <Input
+              id="edit-household-label"
+              placeholder="Viven juntos / Conviven / Hogar de..."
+              value={householdLabel}
+              onFocus={() => checkpoint()}
+              onChange={(e) => {
+                setHouseholdLabelInput(e.target.value);
+                if (person.household != null) setHouseholdLabel(person.household, e.target.value);
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => updatePerson(person.id, { household: null })}
+            >
+              Quitar de este núcleo
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Button type="button" variant="outline" size="sm" onClick={assignToNewHousehold}>
+              + Nuevo núcleo aquí
+            </Button>
+            {householdGroups.map((g) => (
               <button
-                key={n}
+                key={g.id}
                 type="button"
-                className={cn(
-                  "rounded-full border px-2.5 py-1 text-xs",
-                  person.household === n ? "border-ink bg-secondary font-semibold" : "border-input text-muted-foreground",
-                )}
-                onClick={() => {
-                  setHousehold(String(n));
-                  updatePerson(person.id, { household: n });
-                }}
+                className="rounded-full border border-input px-2.5 py-1 text-xs text-muted-foreground hover:border-ink"
+                onClick={() => updatePerson(person.id, { household: g.id })}
               >
-                Núcleo {n}
+                Sumar a «{g.label}»
               </button>
             ))}
           </div>
-        ) : null}
+        )}
       </div>
       <div>
         <Label htmlFor="edit-occ">Ocupación</Label>

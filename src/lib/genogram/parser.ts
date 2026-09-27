@@ -143,6 +143,12 @@ const STOP = new Set(
     "Viven",
     "Convive",
     "Conviven",
+    "Junto",
+    "Junta",
+    "Juntos",
+    "Juntas",
+    "Misma",
+    "Casa",
     "Nació",
     "Nacio",
     "Nacida",
@@ -343,6 +349,30 @@ function addRel(b: Builder, type: RelType, a: string, bId: string) {
   b.relationships.push({ id: `r${b.nextR++}`, type, a, b: bId });
 }
 
+/** Groups the given person ids into the same "household" (the dotted circle),
+ * merging with any household(s) they already belong to. */
+function linkHousehold(b: Builder, ids: string[]) {
+  const uniqueIds = [...new Set(ids.filter(Boolean))];
+  if (uniqueIds.length < 2) return;
+  const people = uniqueIds
+    .map((id) => b.persons.find((p) => p.id === id))
+    .filter((p): p is Person => Boolean(p));
+  if (people.length < 2) return;
+  const existing = [...new Set(people.map((p) => p.household).filter((n): n is number => n != null))];
+  let target: number;
+  if (existing.length > 0) {
+    target = Math.min(...existing);
+  } else {
+    const maxId = b.persons.reduce((m, p) => (p.household != null ? Math.max(m, p.household) : m), 0);
+    target = maxId + 1;
+  }
+  for (const p of b.persons) {
+    if (uniqueIds.includes(p.id) || (p.household != null && existing.includes(p.household))) {
+      p.household = target;
+    }
+  }
+}
+
 function ageNear(sentence: string, name: string): number | null {
   const re = new RegExp(`${name}\\s+(?:de\\s+)?(\\d{1,3})(?:\\s*años?)?`, "iu");
   const m = sentence.match(re);
@@ -421,6 +451,8 @@ export function parseFamilyText(text: string): GenogramData {
     .split(/[\.\n;]+/)
     .map((s) => s.trim())
     .filter(Boolean);
+
+  let allTogether = false;
 
   for (const sentence of sentences) {
     const lower = sentence.toLowerCase();
@@ -534,7 +566,31 @@ export function parseFamilyText(text: string): GenogramData {
     } else if ((m = sentence.match(cohabRe))) {
       const n1 = cleanName(m[1]);
       const n2 = cleanName(m[3]);
-      addRel(b, "cohabitation", getOrCreate(b, n1, { age: m[2] ? Number(m[2]) : null }), getOrCreate(b, n2));
+      const id1 = getOrCreate(b, n1, { age: m[2] ? Number(m[2]) : null });
+      const id2 = getOrCreate(b, n2);
+      addRel(b, "cohabitation", id1, id2);
+      linkHousehold(b, [id1, id2]);
+    }
+
+    // "X y Y viven juntos", "X, Y y Z conviven", "viven en la misma casa" → same household circle.
+    const householdListRe = new RegExp(
+      `(${NAME})(?:\\s*,\\s*(${NAME}))*\\s+(?:y|e)\\s+(${NAME})\\s+(?:viven\\s+junt[oa]s|conviven|viven\\s+en\\s+la\\s+misma\\s+casa)`,
+      "iu",
+    );
+    if ((m = sentence.match(householdListRe))) {
+      const names = [m[1], m[2], m[3]].filter(Boolean).map((n) => cleanName(n)).filter(Boolean);
+      linkHousehold(
+        b,
+        names.map((n) => getOrCreate(b, n)),
+      );
+    }
+
+    // "Todos viven juntos" / "todos conviven" → everyone parsed so far goes in one household.
+    if (
+      /\btodos\b/u.test(lower) &&
+      (/\bconviven\b/u.test(lower) || (/\bviven\b/u.test(lower) && /\bjunt[oa]s?\b/u.test(lower)))
+    ) {
+      allTogether = true;
     }
 
     const divRe = new RegExp(`(${NAME})\\s+(?:est[aá]\\s+)?divorciad([oa])\\s+de\\s+(${NAME})`, "u");
@@ -808,6 +864,13 @@ export function parseFamilyText(text: string): GenogramData {
         ((r.a === unique[0] && r.b === unique[1]) || (r.a === unique[1] && r.b === unique[0])),
     );
     if (!hasUnion) addRel(b, "marriage", unique[0]!, unique[1]!);
+  }
+
+  if (allTogether) {
+    linkHousehold(
+      b,
+      b.persons.map((p) => p.id),
+    );
   }
 
   return { persons: b.persons, relationships: b.relationships };

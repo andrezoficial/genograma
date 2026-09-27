@@ -37,10 +37,18 @@ export type Relationship = {
   b: string;
 };
 
+export type Household = {
+  id: number;
+  label: string;
+};
+
 export type GenogramData = {
   persons: Person[];
   relationships: Relationship[];
+  households?: Household[];
 };
+
+export const DEFAULT_HOUSEHOLD_LABEL = "Viven juntos";
 
 export const UNION_TYPES: RelType[] = [
   "marriage",

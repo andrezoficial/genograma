@@ -2,7 +2,17 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode
 import { ChevronDown, Link2, Maximize2, Minus, Plus, UserPlus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PARENT_TYPES, REL_LABELS, UNION_TYPES, personYears, type Gender, type Person, type RelType, type Relationship } from "@/lib/genogram/types";
+import {
+  PARENT_TYPES,
+  REL_LABELS,
+  UNION_TYPES,
+  personYears,
+  type Gender,
+  type Household,
+  type Person,
+  type RelType,
+  type Relationship,
+} from "@/lib/genogram/types";
 import { useGenogram } from "@/lib/genogram/store";
 import { cn } from "@/lib/utils";
 
@@ -274,7 +284,7 @@ function RelLayer({ persons, relationships }: { persons: Person[]; relationships
 
 const HOUSEHOLD_STROKE = "#5b6b5e";
 
-function HouseholdLayer({ persons }: { persons: Person[] }) {
+function HouseholdLayer({ persons, households }: { persons: Person[]; households: Household[] }) {
   const groups = new Map<number, Person[]>();
   for (const p of persons) {
     if (p.household == null) continue;
@@ -284,6 +294,7 @@ function HouseholdLayer({ persons }: { persons: Person[] }) {
   }
   if (groups.size === 0) return null;
 
+  const labelOf = (id: number) => households.find((h) => h.id === id)?.label || "Viven juntos";
   const PAD = 46;
   const nodes: ReactNode[] = [];
   groups.forEach((members, id) => {
@@ -296,18 +307,32 @@ function HouseholdLayer({ persons }: { persons: Person[] }) {
     const rx = (maxX - minX) / 2 + PAD;
     const ry = (maxY - minY) / 2 + PAD + 14;
     nodes.push(
-      <ellipse
-        key={`household-${id}`}
-        cx={cx}
-        cy={cy}
-        rx={rx}
-        ry={ry}
-        fill="none"
-        stroke={HOUSEHOLD_STROKE}
-        strokeWidth={1.6}
-        strokeDasharray="6 6"
-        opacity={0.75}
-      />,
+      <g key={`household-${id}`}>
+        <ellipse
+          cx={cx}
+          cy={cy}
+          rx={rx}
+          ry={ry}
+          fill="none"
+          stroke={HOUSEHOLD_STROKE}
+          strokeWidth={1.6}
+          strokeDasharray="6 6"
+          opacity={0.75}
+        />
+        <text
+          x={cx}
+          y={cy - ry - 10}
+          textAnchor="middle"
+          fontSize={11}
+          fontWeight={700}
+          letterSpacing={0.3}
+          fill={HOUSEHOLD_STROKE}
+          fontFamily={TYPEFACE}
+          opacity={0.85}
+        >
+          {labelOf(id).toUpperCase()}
+        </text>
+      </g>,
     );
   });
   return <g>{nodes}</g>;
@@ -427,6 +452,8 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
   const persist = useGenogram((s) => s.persist);
   const addPerson = useGenogram((s) => s.addPerson);
   const addRelationship = useGenogram((s) => s.addRelationship);
+  const linkHousehold = useGenogram((s) => s.linkHousehold);
+  const households = useGenogram((s) => s.households);
   const layoutEpoch = useGenogram((s) => s.layoutEpoch);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>({ x: 40, y: 30, k: 1 });
@@ -696,7 +723,7 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
         data-world-svg
       >
         <g data-world transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
-          <HouseholdLayer persons={persons} />
+          <HouseholdLayer persons={persons} households={households} />
           <RelLayer persons={persons} relationships={relationships} />
           {persons.map((p) => (
             <PersonMark
@@ -824,6 +851,18 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
             {nameOf(linkMenu.a)} → {nameOf(linkMenu.b)}
           </p>
           <div className="mt-3 grid max-h-64 grid-cols-1 gap-1 overflow-y-auto">
+            <button
+              type="button"
+              className="h-10 rounded-md border border-dashed px-3 text-left text-sm font-medium hover:bg-accent"
+              style={{ borderColor: HOUSEHOLD_STROKE, color: HOUSEHOLD_STROKE }}
+              onClick={() => {
+                linkHousehold(linkMenu.a, linkMenu.b);
+                setLinkMenu(null);
+                setTool("select");
+              }}
+            >
+              Viven juntos / conviven
+            </button>
             {LINK_TYPES.map((t) => (
               <button
                 key={t}
