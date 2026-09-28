@@ -108,10 +108,27 @@ export const parseFamilyWithAi = createServerFn({ method: "POST" })
           ],
         }),
       });
-    } catch {
-      return FAIL;
+    } catch (err) {
+      console.error(`[ai] ${cfg.name} fetch failed`, err);
+      return { ok: false as const, error: `No se pudo conectar con ${cfg.name} (${cfg.model}).` };
     }
-    if (!res.ok) return FAIL;
+    if (!res.ok) {
+      let detail = "";
+      try {
+        const raw = await res.text();
+        try {
+          const j = JSON.parse(raw) as { error?: { message?: string } } | { error?: { message?: string } }[];
+          detail = (Array.isArray(j) ? j[0] : j)?.error?.message ?? raw;
+        } catch {
+          detail = raw;
+        }
+      } catch {
+        /* ignore */
+      }
+      detail = detail.replace(/\s+/g, " ").slice(0, 200);
+      console.error(`[ai] ${cfg.name} ${cfg.model} → HTTP ${res.status}: ${detail}`);
+      return { ok: false as const, error: `${cfg.name} (${cfg.model}) respondió ${res.status}: ${detail || "sin detalle"}` };
+    }
 
     let body: { choices?: { message?: { content?: string }; finish_reason?: string }[] };
     try {
