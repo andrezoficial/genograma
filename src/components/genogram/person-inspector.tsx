@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { DEFAULT_HOUSEHOLD_LABEL, REL_LABELS, type Gender, type Person } from "@/lib/genogram/types";
+import { DEFAULT_HOUSEHOLD_LABEL, REL_LABELS, UNION_TYPES, type Gender, type Person } from "@/lib/genogram/types";
 import { useGenogram } from "@/lib/genogram/store";
 
 const selectClass =
@@ -14,6 +14,7 @@ export function PersonInspector({ person }: { person: Person }) {
   const updatePerson = useGenogram((s) => s.updatePerson);
   const removePerson = useGenogram((s) => s.removePerson);
   const removeRelationship = useGenogram((s) => s.removeRelationship);
+  const updateRelationshipType = useGenogram((s) => s.updateRelationshipType);
   const relationships = useGenogram((s) => s.relationships);
   const persons = useGenogram((s) => s.persons);
   const households = useGenogram((s) => s.households);
@@ -233,9 +234,29 @@ export function PersonInspector({ person }: { person: Person }) {
           <ul className="space-y-1">
             {related.map((r) => (
               <li key={r.id} className="flex items-center justify-between gap-2 rounded-md bg-secondary px-2 py-1.5 text-sm">
-                <span className="min-w-0 truncate">
-                  {REL_LABELS[r.type]} · {nameOf(r.a === person.id ? r.b : r.a)}
-                </span>
+                {UNION_TYPES.includes(r.type) ? (
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {nameOf(r.a === person.id ? r.b : r.a)}
+                    </span>
+                    <select
+                      className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={r.type}
+                      onChange={(e) => updateRelationshipType(r.id, e.target.value as (typeof r)["type"])}
+                      aria-label="Tipo de vínculo de pareja"
+                    >
+                      {UNION_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {REL_LABELS[t]}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                ) : (
+                  <span className="min-w-0 truncate">
+                    {REL_LABELS[r.type]} · {nameOf(r.a === person.id ? r.b : r.a)}
+                  </span>
+                )}
                 <button
                   type="button"
                   className="shrink-0 text-muted-foreground hover:text-destructive"

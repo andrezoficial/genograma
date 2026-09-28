@@ -122,7 +122,7 @@ export function Sidebar() {
               placeholder="María está casada con Juan. Tienen dos hijos: Laura y Pedro."
             />
             <p className="mb-3 mt-2 text-xs text-muted-foreground">
-              Nombres, edades, matrimonio, hijos, padres, fallecimiento, hermanos, convivencia, paciente identificado y conflicto. También vale en minúsculas o en primera persona («estoy casada», «tengo dos hijos»).
+              Detecta personas (hombre, mujer, género s/d, fallecido, paciente identificado), convivencia («viven juntos»), vínculos familiares (matrimonio, unión libre, separación, divorcio, hijos, adopción, hermanos) y vínculos emocionales (cercana, distante, corte, conflicto). También vale en minúsculas o en primera persona («estoy casada», «tengo dos hijos»).
             </p>
             {preview.persons.length > 0 ? (
               <div className="mb-3 rounded-xl bg-secondary px-3 py-2 text-xs text-muted-foreground">

@@ -20,6 +20,8 @@ export type LegendKind =
   | "cohabitation"
   | "separation"
   | "divorce"
+  | "widowed"
+  | "dating"
   | "child"
   | "adopted"
   | "close"
@@ -58,9 +60,11 @@ export const LEGEND_GROUPS: { title: string; items: { kind: LegendKind; label: s
     title: "Vínculos familiares",
     items: [
       { kind: "marriage", label: "Matrimonio" },
-      { kind: "cohabitation", label: "Unión de hecho" },
-      { kind: "separation", label: "Separación" },
-      { kind: "divorce", label: "Divorcio" },
+      { kind: "cohabitation", label: "Unión libre" },
+      { kind: "separation", label: "Separados/as" },
+      { kind: "divorce", label: "Divorciados/as" },
+      { kind: "widowed", label: "Viudez" },
+      { kind: "dating", label: "Noviazgo" },
       { kind: "child", label: "Hijos" },
       { kind: "adopted", label: "Adopción" },
     ],
@@ -188,6 +192,25 @@ export function glyphSpec(kind: LegendKind): GlyphSpec {
           { tag: "line", attrs: { x1: 8, y1: 1.5, x2: 11, y2: 10.5, stroke: INK, "stroke-width": 1.6 } },
           { tag: "line", attrs: { x1: 11, y1: 1.5, x2: 14, y2: 10.5, stroke: INK, "stroke-width": 1.6 } },
         ],
+      };
+    case "widowed":
+      return {
+        viewBox: "0 0 22 12",
+        width: 20,
+        height: 12,
+        els: [
+          { tag: "line", attrs: { x1: 1, y1: 4, x2: 21, y2: 4, stroke: INK, "stroke-width": 1.5 } },
+          { tag: "line", attrs: { x1: 1, y1: 8, x2: 21, y2: 8, stroke: INK, "stroke-width": 1.5 } },
+          { tag: "line", attrs: { x1: 11, y1: 0.5, x2: 11, y2: 11.5, stroke: INK, "stroke-width": 1.6 } },
+          { tag: "line", attrs: { x1: 7.5, y1: 3.5, x2: 14.5, y2: 3.5, stroke: INK, "stroke-width": 1.6 } },
+        ],
+      };
+    case "dating":
+      return {
+        viewBox: "0 0 22 12",
+        width: 20,
+        height: 12,
+        els: [{ tag: "line", attrs: { x1: 1, y1: 6, x2: 21, y2: 6, stroke: INK, "stroke-width": 1.7, "stroke-dasharray": "1.5 3" } }],
       };
     case "child":
       return {

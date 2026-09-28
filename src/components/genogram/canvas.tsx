@@ -37,6 +37,8 @@ const LINK_TYPES: RelType[] = [
   "cohabitation",
   "separation",
   "divorce",
+  "widowed",
+  "dating",
   "parent_child",
   "adopted",
   "sibling",
@@ -98,8 +100,10 @@ function RelLayer({ persons, relationships }: { persons: Person[]; relationships
     const x2 = right.x - HALF - 2;
     const midX = (left.x + right.x) / 2;
     const dashed = r.type === "cohabitation";
-    const double = r.type === "marriage" || r.type === "divorce" || r.type === "separation";
-    const sepDash = r.type === "separation" ? "5 4" : dashed ? "7 5" : undefined;
+    const double =
+      r.type === "marriage" || r.type === "divorce" || r.type === "separation" || r.type === "widowed";
+    const sepDash =
+      r.type === "separation" ? "5 4" : dashed ? "7 5" : r.type === "dating" ? "2 5" : undefined;
 
     nodes.push(
       <g key={r.id}>
@@ -122,6 +126,12 @@ function RelLayer({ persons, relationships }: { persons: Person[]; relationships
             strokeWidth={2}
             strokeDasharray={r.type === "separation" ? "5 4" : undefined}
           />
+        ) : null}
+        {r.type === "widowed" ? (
+          <>
+            <line x1={midX} y1={y - 11} x2={midX} y2={y + 11} stroke={INK} strokeWidth={2} />
+            <line x1={midX - 6} y1={y - 5} x2={midX + 6} y2={y - 5} stroke={INK} strokeWidth={2} />
+          </>
         ) : null}
         {r.type === "divorce" || r.type === "separation" ? (
           <>
@@ -524,7 +534,45 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
     px: number;
     py: number;
     moved: boolean;
+    place?: boolean;
   }>(null);
+
+  // Dedos activos en pantalla táctil (para el zoom con pellizco)
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<null | { dist: number; k: number; wx: number; wy: number }>(null);
+
+  const pinchGeometry = () => {
+    const svg = svgRef.current;
+    const pts = Array.from(pointers.current.values());
+    if (!svg || pts.length < 2) return null;
+    const rect = svg.getBoundingClientRect();
+    const [a, b] = pts;
+    return {
+      dist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+      mx: (a.x + b.x) / 2 - rect.left,
+      my: (a.y + b.y) / 2 - rect.top,
+    };
+  };
+
+  const onPointerDownCapture = (e: PointerEvent) => {
+    if (e.pointerType === "mouse") return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size !== 2) return;
+    // Empieza el pellizco: se cancela cualquier arrastre en curso
+    const d = drag.current;
+    if ((d?.kind === "person" || d?.kind === "household-label") && d.moved) persist();
+    drag.current = null;
+    const g = pinchGeometry();
+    if (!g) return;
+    const current = viewRef.current;
+    pinch.current = {
+      dist: g.dist,
+      k: current.k,
+      wx: (g.mx - current.x) / current.k,
+      wy: (g.my - current.y) / current.k,
+    };
+    setDraft(null);
+  };
 
   const toWorld = (clientX: number, clientY: number) => {
     const svg = svgRef.current;
@@ -649,25 +697,46 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
 
   const onPointerDownBg = (e: PointerEvent<SVGSVGElement>) => {
     if (e.button !== 0) return;
+    if (pointers.current.size > 1) return;
     if (draft || linkMenu) {
       setDraft(null);
       setLinkMenu(null);
       return;
     }
-    if (tool === "add") {
-      placeDraft(e.clientX, e.clientY);
-      return;
-    }
     svgRef.current?.setPointerCapture(e.pointerId);
     const current = viewRef.current;
-    drag.current = { kind: "pan", sx: e.clientX, sy: e.clientY, vx: current.x, vy: current.y, px: 0, py: 0, moved: false };
-    select(null);
+    drag.current = {
+      kind: "pan",
+      sx: e.clientX,
+      sy: e.clientY,
+      vx: current.x,
+      vy: current.y,
+      px: 0,
+      py: 0,
+      moved: false,
+      // En modo "Añadir" el toque solo coloca a la persona si NO fue un arrastre
+      place: tool === "add",
+    };
+    if (tool !== "add") select(null);
   };
 
   const onPointerDownPerson = (e: PointerEvent, person: Person) => {
     e.stopPropagation();
+    if (pointers.current.size > 1) return;
     if (tool === "add") {
-      placeDraft(e.clientX, e.clientY);
+      svgRef.current?.setPointerCapture(e.pointerId);
+      const current = viewRef.current;
+      drag.current = {
+        kind: "pan",
+        sx: e.clientX,
+        sy: e.clientY,
+        vx: current.x,
+        vy: current.y,
+        px: 0,
+        py: 0,
+        moved: false,
+        place: true,
+      };
       return;
     }
     if (tool === "link") {
@@ -718,11 +787,25 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
   };
 
   const onPointerMove = (e: PointerEvent) => {
+    if (pointers.current.has(e.pointerId)) {
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+    if (pinch.current) {
+      const g = pinchGeometry();
+      if (!g) return;
+      const start = pinch.current;
+      const nk = Math.min(2.6, Math.max(0.35, start.k * (g.dist / start.dist)));
+      // El punto del mundo bajo los dedos se mantiene bajo los dedos (zoom + desplazamiento)
+      setView({ k: nk, x: g.mx - start.wx * nk, y: g.my - start.wy * nk });
+      return;
+    }
     const d = drag.current;
     if (!d) return;
     const dx = e.clientX - d.sx;
     const dy = e.clientY - d.sy;
-    if (Math.hypot(dx, dy) > 3) d.moved = true;
+    const threshold = e.pointerType === "touch" ? 8 : 3;
+    if (Math.hypot(dx, dy) > threshold) d.moved = true;
+    if (d.kind === "pan" && !d.moved) return;
     if (d.kind === "pan") {
       setView({ k: viewRef.current.k, x: d.vx + dx, y: d.vy + dy });
     } else if (d.kind === "person" && d.id) {
@@ -732,7 +815,20 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
     }
   };
 
-  const onPointerUp = () => {
+  const onPointerUp = (e: PointerEvent) => {
+    pointers.current.delete(e.pointerId);
+    if (pinch.current) {
+      // Al levantar un dedo termina el pellizco; no se mueve nada ni se coloca persona
+      if (pointers.current.size < 2) pinch.current = null;
+      drag.current = null;
+      return;
+    }
+    const d = drag.current;
+    if (e.type === "pointerup" && d?.kind === "pan" && d.place && !d.moved) {
+      drag.current = null;
+      placeDraft(e.clientX, e.clientY);
+      return;
+    }
     if (
       (drag.current?.kind === "person" || drag.current?.kind === "household-label") &&
       drag.current.moved
@@ -778,14 +874,17 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
           "relative z-[1] h-full w-full touch-none select-none",
           tool === "add" ? "cursor-crosshair" : tool === "link" ? "cursor-pointer" : "",
         )}
+        onPointerDownCapture={onPointerDownCapture}
         onPointerDown={onPointerDownBg}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onDoubleClick={(e) => {
+          // Solo con mouse: en el celular dos toques al mover el lienzo
+          // se interpretaban como doble clic y abrían "Nueva persona".
+          if (!window.matchMedia("(pointer: fine)").matches) return;
           e.preventDefault();
           placeDraft(e.clientX, e.clientY);
-          setTool("add");
         }}
         data-world-svg
       >

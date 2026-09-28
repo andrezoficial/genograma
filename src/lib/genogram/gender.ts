@@ -210,21 +210,19 @@ export function inferGenderFromName(name: string, fallback: Gender = "unknown"):
   return fallback;
 }
 
+const WORD_START = "(?<![\\p{L}])";
+const WORD_END = "(?![\\p{L}])";
+const FEMALE_WORDS = new RegExp(
+  `${WORD_START}(?:casadas?|esposas?|mujer(?:es)?|madres?|hermanas?|hijas?|t[ií]as?|abuelas?|nietas?|nueras?|primas?|se[nñ]oras?|sras?|novias?|viudas?|divorciadas?|separadas?|adoptadas?|ni[nñ]as?|chicas?|exesposas?|fallecidas?)${WORD_END}`,
+  "iu",
+);
+const MALE_WORDS = new RegExp(
+  `${WORD_START}(?:casados?|esposos?|maridos?|hombres?|var[oó]n(?:es)?|padres?|hermanos?|hijos?|t[ií]os?|abuelos?|nietos?|yernos?|primos?|se[nñ]ores?|sres?|novios?|viudos?|divorciados?|separados?|adoptados?|ni[nñ]os?|chicos?|exesposos?|exmaridos?|fallecidos?)${WORD_END}`,
+  "iu",
+);
+
 export function genderFromWord(word: string): Gender | null {
-  const w = word.toLowerCase();
-  if (
-    /casada|esposa|mujer|madre|hermana|hija|tía|tia|abuela|nieta|nuera|prima|señora|sra/.test(
-      w,
-    )
-  ) {
-    return "female";
-  }
-  if (
-    /casado|esposo|marido|hombre|padre|hermano|hijo|tío|tio|abuelo|nieto|yerno|primo|señor|sr/.test(
-      w,
-    )
-  ) {
-    return "male";
-  }
+  if (FEMALE_WORDS.test(word)) return "female";
+  if (MALE_WORDS.test(word)) return "male";
   return null;
 }

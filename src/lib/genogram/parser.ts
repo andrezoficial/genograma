@@ -206,6 +206,31 @@ const STOP = new Set(
   ].map((w) => w.toLowerCase()),
 );
 
+const EXTRA_STOP = `unión union libre libres hecho concubinato concubina concubino pareja parejas compañero compañera
+novio novia novios novias noviazgo sale salen salió sostiene separó separo separaron separan separación separacion
+divorció divorcio divorciaron divorcian casó casaron adoptaron adoptó adopto adoptan adoptamos adopté adopte
+adoptiva adoptivo adoptivos adoptivas cercanos unidos unida unido unidas estrecha estrecho distanciado distanciada
+distanciados distanciadas distanció distancio distancia lejana lejano lejanos fría frío fria frio cortaron cortada
+cortado cortados cortadas corte relacional hablan habla habló hablo tratan contacto conflictos conflictiva conflictivo
+discute discuten pelea pelean peleó peleado peleada peleados peleadas enfrentado enfrentada enfrentados llevan lleva
+bien mal ex exmarido exmujer expareja exnovio exnovia género genero binario binaria binarie desconocido desconocida
+especificado especificada definido definida indefinido datos persona personas fallecido fallecida fallecidos
+fallecidas fallecieron fallecen murieron muerto muerta muertos difunto difunta difuntos finado finada consultante
+no ni sin sí si ya más mas menos poco entre desde hasta sobre tras cada otra otro otros otras ambos ambas todos todas
+nadie aunque porque cuando donde quien quienes sino mientras tampoco actualmente actual hijastro hijastra gemelos
+gemelas gemelo gemela mellizos mellizas primogénito primogenito menor mayor sobrino sobrina primo prima suegro suegra
+cuñado cuñada yerno nuera padrastro madrastra pero comparten comparte residen reside techo mismo núcleo nucleo hogar
+familiar familiares formado formada forman matrimonio esposos enviudó enviudo viudos quedó quedo relaciones vínculo
+vinculo vínculos vinculos emocionales emocional convivencia estuvo estuvieron quedaron cariñosa cariñoso afectuosa
+afectuoso apegada apegado apegados cercanía cercania ven vio ve hablar contactos sd pi sido ha han hemos he había
+habia roto rota rotos rotas rompió rompieron rompe enfrentan sienten siente unión exesposo exesposa`
+  .split(/\s+/)
+  .filter(Boolean);
+for (const w of EXTRA_STOP) STOP.add(w);
+
+/** Optional age right after a name: "de 45", "45 años", "de 45 años". */
+const AG = String.raw`(?:\s+(?:de\s+)?\d{1,3}(?:\s*años?)?)?`;
+
 function isNameToken(token: string): boolean {
   return new RegExp(`^${TOKEN}$`, "u").test(token) && !STOP.has(token.toLowerCase());
 }
@@ -236,7 +261,27 @@ function cleanName(raw: string): string {
   return titleCase(parts.slice(0, 3).join(" "));
 }
 
+/** Full example: exercises every item of the legend (people, household, family ties, emotional ties). */
 export const EXAMPLE_TEXT = `María de 45 años está casada con Juan de 48.
+Tienen dos hijos: Laura de 15 y Pedro de 12.
+Adoptaron a Sofía de 8 años.
+Los padres de María se llaman Carmen y José.
+José falleció en 2018.
+María tiene una hermana llamada Ana de 42.
+Ana vive en unión libre con Diego de 44.
+Alex de 20 años es hijo de Ana y Diego, de género no binario.
+Juan tiene un hermano llamado Luis de 50.
+Luis está divorciado de Rosa de 47.
+Juan tiene otro hermano llamado Marcos de 46, que se separó de Elena de 44.
+María es la paciente identificada.
+María, Juan, Laura, Pedro y Sofía viven juntos.
+María es muy cercana a Laura.
+Pedro y Juan tienen una relación distante.
+Luis cortó la relación con Juan.
+María y Ana tienen conflicto.`;
+
+/** Short example (kept for tests and quick demos). */
+export const BASIC_EXAMPLE_TEXT = `María de 45 años está casada con Juan de 48.
 Tienen dos hijos: Laura de 15 y Pedro de 12.
 Los padres de María se llaman Carmen y José.
 José falleció en 2018.
@@ -251,10 +296,20 @@ type Builder = {
   nextP: number;
   nextR: number;
   selfId: string | null;
+  /** People whose gender was stated as "no binario / s/d": never overwritten by name heuristics. */
+  genderLocked: Set<string>;
 };
 
 function makeBuilder(): Builder {
-  return { persons: [], relationships: [], nameToId: {}, nextP: 1, nextR: 1, selfId: null };
+  return {
+    persons: [],
+    relationships: [],
+    nameToId: {},
+    nextP: 1,
+    nextR: 1,
+    selfId: null,
+    genderLocked: new Set(),
+  };
 }
 
 function getOrCreate(
@@ -281,7 +336,9 @@ function getOrCreate(
       if (opts.deathYear) p.deathYear = opts.deathYear;
       if (opts.birthYear && p.birthYear == null) p.birthYear = opts.birthYear;
       if (opts.identifiedPatient) p.identifiedPatient = true;
-      if (opts.gender && opts.gender !== "unknown" && p.gender === "unknown") p.gender = opts.gender;
+      if (opts.gender && opts.gender !== "unknown" && p.gender === "unknown" && !b.genderLocked.has(p.id)) {
+        p.gender = opts.gender;
+      }
     }
     return existingId;
   }
@@ -309,10 +366,16 @@ function ensureSelf(b: Builder, opts: { gender?: Gender | null } = {}): string {
     if (p && opts.gender && opts.gender !== "unknown" && p.gender === "unknown") p.gender = opts.gender;
     return b.selfId;
   }
-  const id = getOrCreate(b, "Consultante", {
-    identifiedPatient: true,
-    gender: opts.gender ?? "unknown",
-  });
+  const id = `p${b.nextP++}`;
+  b.nameToId["consultante"] = id;
+  b.persons.push(
+    emptyPerson({
+      id,
+      name: "Consultante",
+      gender: opts.gender && opts.gender !== "unknown" ? opts.gender : "unknown",
+      identifiedPatient: true,
+    }),
+  );
   b.selfId = id;
   return id;
 }
@@ -352,6 +415,15 @@ function addRel(b: Builder, type: RelType, a: string, bId: string) {
   b.relationships.push({ id: `r${b.nextR++}`, type, a, b: bId });
 }
 
+/** Adds a marriage between two co-parents only when they have no union recorded yet. */
+function ensureUnion(b: Builder, x: string, y: string) {
+  if (!x || !y || x === y) return;
+  const has = b.relationships.some(
+    (r) => UNION_TYPES.includes(r.type) && ((r.a === x && r.b === y) || (r.a === y && r.b === x)),
+  );
+  if (!has) addRel(b, "marriage", x, y);
+}
+
 /** Groups the given person ids into the same "household" (the dotted circle),
  * merging with any household(s) they already belong to. */
 function linkHousehold(b: Builder, ids: string[]) {
@@ -383,20 +455,26 @@ function ageNear(sentence: string, name: string): number | null {
   return null;
 }
 
-function parseNamedPeople(chunk: string): { name: string; age: number | null; gender: Gender | null }[] {
+type NamedPerson = { name: string; age: number | null; gender: Gender | null; adopted: boolean };
+
+const KID_FILLER = String.raw`^(?:(?:tambi[eé]n|adem[aá]s|otro|otra|un|una|el|la|los|las)\s+)*(?:(?:hij[oa]|ni[nñ][oa]|beb[eé])s?\s*)?(?:(adoptad[oa]s?|adoptiv[oa]s?)\s*)?(?:llamad[oa]s?\s+|de\s+nombre\s+)?`;
+
+function parseNamedPeople(chunk: string): NamedPerson[] {
   const parts = chunk
     .split(/,|;| y | e /i)
     .map((s) => s.trim())
     .filter(Boolean);
-  const out: { name: string; age: number | null; gender: Gender | null }[] = [];
+  const out: NamedPerson[] = [];
   for (const part of parts) {
-    const m = part.match(new RegExp(`^(${NAME})(?:\\s+${AGE})?`, "u"));
+    const filler = part.match(new RegExp(KID_FILLER, "iu"));
+    const rest = filler ? part.slice(filler[0].length) : part;
+    const m = rest.match(new RegExp(`^(${NAME})(?:\\s+${AGE})?`, "u"));
     if (!m) continue;
     const name = cleanName(m[1]);
     if (!name) continue;
     const age = m[2] ? Number(m[2]) : null;
     const gender = genderFromWord(part);
-    out.push({ name, age, gender });
+    out.push({ name, age, gender, adopted: Boolean(filler?.[1]) });
   }
   return out;
 }
@@ -420,7 +498,7 @@ function idsMentioned(b: Builder, sentence: string, exclude: string[] = []): str
 function parentsForChildren(b: Builder, sentence: string, kidNames: string[]): string[] {
   const mentioned = idsMentioned(b, sentence, kidNames);
   if (mentioned.length) return mentioned;
-  if (/\b(tengo|tuve|tenemos|tuvimos)\b/i.test(sentence)) {
+  if (/\b(tengo|tuve|tenemos|tuvimos|adopt[eé]|adoptamos)\b/i.test(sentence)) {
     const self = ensureSelf(b);
     const union = lastUnion(b);
     if (union && (union.a === self || union.b === self)) return [union.a, union.b];
@@ -433,16 +511,403 @@ function parentsForChildren(b: Builder, sentence: string, kidNames: string[]): s
 function preprocess(text: string): string {
   const normalized = text
     .replace(/\r/g, "")
+    // bullets / numbering at the start of a line
+    .replace(/^[ \t]*(?:[-*•·▪‣]|\d+[.)])[ \t]+/gmu, "")
+    // "ex esposa", "ex-pareja" → "exesposa", "expareja"
+    .replace(/\bex[\s-]+(esposo|esposa|marido|mujer|pareja|novio|novia)\b/giu, (_m, w: string) => `ex${w.toLowerCase()}`)
     .replace(/\b(\p{L}[\p{L}'-]*?)\s*\((\d{1,3})\)/gu, "$1 de $2 años")
     .replace(/\b(\p{L}[\p{L}'-]*?),\s*(\d{1,3})\s*años/giu, "$1 de $2 años");
 
-  return normalized.replace(/[\p{L}]+(?:-[\p{L}]+)*/gu, (word) => {
+  const capitalized = normalized.replace(/[\p{L}]+(?:-[\p{L}]+)*/gu, (word) => {
     const lower = word.toLowerCase();
     if (STOP.has(lower)) return lower;
     if (["de", "del", "la", "las", "los", "y", "e"].includes(lower)) return lower;
     if (word.length < 2) return word;
+    // Verb/adjective endings that are never given names → keep as plain words.
+    if (word.length >= 7 && /(?:aron|ieron|ando|iendo|ción|sión|mente)$/iu.test(word)) return lower;
+    if (word.length >= 8 && /(?:ados|adas|idos|idas)$/iu.test(word)) return lower;
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
   });
+
+  // "José (fallecido) era el padre…" → "José fallecido. José era el padre…"
+  // "Sam (género s/d) es hijo…" · "Pedro (paciente identificado) tiene…" — same idea.
+  const NAME_TOKENS = String.raw`(\p{Lu}\p{L}+(?:\s+(?:de\s+|del\s+)?\p{Lu}\p{L}+)?)`;
+  const ANNOTATION = String.raw`((?:falleci|muert|difunt|finad|paciente|consultante|g[eé]nero|no\s+binari|pi\b|s\/d|†)[^)]*)`;
+  return capitalized.replace(new RegExp(String.raw`${NAME_TOKENS}\s*\(\s*${ANNOTATION}\)`, "giu"), (_m, name: string, note: string) => {
+    const label = note.trim().toLowerCase();
+    return `${name} ${label}. ${name}`;
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Extra detectors: links, death, patient, gender, household, adoption */
+/* ------------------------------------------------------------------ */
+
+const NA = (g: string) => String.raw`(?<${g}>${NAME})${AG}`;
+const PA = NA("a");
+const PB = NA("b");
+const P2 = String.raw`${PA}\s+(?:y|e)\s+${PB}`;
+const NAME_LIST = String.raw`${NAME}${AG}(?:\s*(?:,|\s+y\s+|\s+e\s+)\s*${NAME}${AG})*`;
+
+const L = (type: RelType, src: string): { type: RelType; re: RegExp } => ({
+  type,
+  re: new RegExp(src, "gu"),
+});
+
+/** Symmetric "pair" phrases. Each one has named groups (?<a>) and (?<b>). */
+const LINK_PATTERNS: { type: RelType; re: RegExp }[] = [
+  // ── Matrimonio ──
+  L("marriage", String.raw`${PA}\s+se\s+cas[oó]\s+con\s+${PB}`),
+  L(
+    "marriage",
+    String.raw`${P2}\s+(?:(?:est[aá]n|son)\s+casad[oa]s|se\s+casaron|casad[oa]s|son\s+(?:un\s+)?matrimonio|son\s+esposos)`,
+  ),
+  L("marriage", String.raw`matrimonio\s+(?:de|entre|formado\s+por)\s+${P2}`),
+  // ── Unión de hecho ──
+  L(
+    "cohabitation",
+    String.raw`${PA}\s+(?:vive|convive)\s+(?:en\s+)?(?:uni[oó]n\s+(?:libre|de\s+hecho)|concubinato|pareja)\s+con\s+${PB}`,
+  ),
+  L("cohabitation", String.raw`${PA}\s+(?:est[aá]\s+)?en\s+(?:uni[oó]n\s+(?:libre|de\s+hecho)|concubinato)\s+con\s+${PB}`),
+  L(
+    "cohabitation",
+    String.raw`${P2}\s+(?:viven|conviven|est[aá]n|son|forman)\s+(?:en\s+|una\s+|como\s+)?(?:uni[oó]n\s+(?:libre|de\s+hecho)|concubinato|pareja(?:\s+de\s+hecho)?)`,
+  ),
+  L("cohabitation", String.raw`uni[oó]n\s+(?:libre|de\s+hecho)\s+(?:entre|de)\s+${P2}`),
+  L("cohabitation", String.raw`${PA}\s+(?:es\s+)?(?:la\s+|el\s+)?(?:pareja|concubin[oa]|compa[nñ]er[oa])\s+de\s+${PB}`),
+  // ── Separación ──
+  L("separation", String.raw`${PA}\s+se\s+separ[oó]\s+de\s+${PB}`),
+  L("separation", String.raw`${PA}\s+(?:est[aá]\s+)?separad[oa]\s+de\s+${PB}`),
+  L("separation", String.raw`${P2}\s+(?:(?:est[aá]n|viven)\s+separad[oa]s|se\s+separaron|separad[oa]s)`),
+  L("separation", String.raw`separaci[oó]n\s+(?:de|entre)\s+${P2}`),
+  // ── Divorcio ──
+  L("divorce", String.raw`${PA}\s+(?:est[aá]\s+)?(?:se\s+)?divorci(?:[oó]|ad[oa])\s+de\s+${PB}`),
+  L("divorce", String.raw`${P2}\s+(?:(?:est[aá]n\s+)?divorciad[oa]s|se\s+divorciaron)`),
+  L("divorce", String.raw`divorcio\s+(?:de|entre)\s+${P2}`),
+  L(
+    "divorce",
+    String.raw`${PA}\s+(?:es\s+)?(?:la\s+|el\s+)?(?:exesposa|exesposo|exmarido|exmujer|expareja)\s+de\s+${PB}`,
+  ),
+  // ── Noviazgo ──
+  L("dating", String.raw`${PA}\s+(?:es\s+)?(?:el\s+|la\s+)?novi[oa]\s+de\s+${PB}`),
+  L("dating", String.raw`${P2}\s+(?:son\s+novi[oa]s|est[aá]n\s+de\s+novios|salen|tienen\s+(?:un\s+)?noviazgo)`),
+  L("dating", String.raw`${PA}\s+(?:sale|est[aá]\s+saliendo)\s+con\s+${PB}`),
+  // ── Cercana ──
+  L("close", String.raw`${P2}\s+(?:son|est[aá]n|se\s+sienten)\s+(?:muy\s+)?(?:cercan[oa]s|unid[oa]s|apegad[oa]s)`),
+  L(
+    "close",
+    String.raw`${P2}\s+(?:tienen|mantienen)\s+(?:una\s+)?(?:relaci[oó]n\s+)?(?:muy\s+)?(?:cercana|estrecha|unida|cari[nñ]osa|afectuosa)`,
+  ),
+  L("close", String.raw`${P2}\s+se\s+llevan\s+(?:muy\s+)?bien`),
+  L("close", String.raw`${PA}\s+(?:es|est[aá])\s+(?:muy\s+)?(?:cercan[oa]|unid[oa]|apegad[oa])\s+(?:a|con|de)\s+${PB}`),
+  L("close", String.raw`${PA}\s+(?:mantiene|tiene)\s+una\s+relaci[oó]n\s+(?:muy\s+)?(?:cercana|estrecha|unida)\s+con\s+${PB}`),
+  // ── Distante ──
+  L("distant", String.raw`${P2}\s+(?:son|est[aá]n)\s+(?:muy\s+)?(?:distantes|distanciad[oa]s|lejan[oa]s|fr[ií]os)`),
+  L("distant", String.raw`${P2}\s+se\s+(?:han\s+)?distanci(?:aron|ado)`),
+  L(
+    "distant",
+    String.raw`${P2}\s+(?:tienen|mantienen)\s+(?:una\s+)?relaci[oó]n\s+(?:muy\s+)?(?:distante|lejana|fr[ií]a|distanciada)`,
+  ),
+  L("distant", String.raw`${PA}\s+(?:est[aá]|se\s+ha\s+quedado)\s+(?:muy\s+)?distanciad[oa]\s+de\s+${PB}`),
+  L("distant", String.raw`${PA}\s+se\s+(?:ha\s+)?distanci[oó]\s+de\s+${PB}`),
+  L("distant", String.raw`${PA}\s+es\s+(?:muy\s+)?distante\s+(?:con|de|a|para)\s+${PB}`),
+  L("distant", String.raw`${P2}\s+se\s+ven\s+poco`),
+  // ── Corte ──
+  L(
+    "cutoff",
+    String.raw`${PA}\s+(?:cort[oó]|rompi[oó]|ha\s+cortado|ha\s+roto)\s+(?:(?:la|el|toda|todo)\s+)?(?:relaci[oó]n|contacto|v[ií]nculo)\s+con\s+${PB}`,
+  ),
+  L(
+    "cutoff",
+    String.raw`${P2}\s+(?:no\s+se\s+(?:hablan|ven|tratan)|no\s+tienen\s+contacto|(?:est[aá]n\s+)?(?:cortad[oa]s|rot[oa]s)|(?:cortaron|rompieron)\s+(?:la\s+|el\s+)?(?:relaci[oó]n|contacto)|est[aá]n\s+sin\s+contacto)`,
+  ),
+  L("cutoff", String.raw`${PA}\s+no\s+(?:habla|ve|trata|tiene\s+contacto)\s+con\s+${PB}`),
+  L("cutoff", String.raw`corte\s+(?:relacional\s+)?(?:entre|de)\s+${P2}`),
+  // ── Conflicto ──
+  L(
+    "conflict",
+    String.raw`${P2}\s+(?:(?:tienen|mantienen|hay)\s+(?:un\s+|una\s+)?(?:relaci[oó]n\s+)?(?:muy\s+)?(?:conflictiv[oa]|conflictos?)|(?:est[aá]n|viven)\s+(?:en\s+conflicto|pelead[oa]s|enfrentad[oa]s)|se\s+llevan\s+mal|discuten|pelean|se\s+pelean)`,
+  ),
+  L("conflict", String.raw`(?:(?:hay|existe)\s+(?:un\s+)?)?conflicto\s+(?:entre|de)\s+${P2}`),
+  L(
+    "conflict",
+    String.raw`${PA}\s+(?:discute|pelea|se\s+pelea|tiene\s+(?:un\s+)?conflicto|est[aá]\s+en\s+conflicto|se\s+lleva\s+mal|est[aá]\s+pelead[oa])\s+con\s+${PB}`,
+  ),
+];
+
+function applyLinks(b: Builder, sentence: string) {
+  for (const { type, re } of LINK_PATTERNS) {
+    re.lastIndex = 0;
+    for (const m of sentence.matchAll(re)) {
+      const an = m.groups?.["a"];
+      const bn = m.groups?.["b"];
+      if (!an || !bn) continue;
+      const ida = getOrCreate(b, cleanName(an));
+      const idb = getOrCreate(b, cleanName(bn));
+      addRel(b, type, ida, idb);
+    }
+  }
+  // "X enviudó de Y" / "X quedó viuda de Y" → Y is deceased.
+  const widow = new RegExp(String.raw`${PA}\s+(?:enviud[oó]|qued[oó]\s+viud[oa])\s+de\s+${PB}`, "u").exec(sentence);
+  if (widow?.groups) {
+    addRel(
+      b,
+      "widowed",
+      getOrCreate(b, cleanName(widow.groups["a"]!)),
+      getOrCreate(b, cleanName(widow.groups["b"]!), { deceased: true }),
+    );
+  }
+}
+
+const DEATH_RE = new RegExp(
+  String.raw`(?:falleci(?:[oó]|eron|d[oa]s?)|fallecen|muri(?:[oó]|eron)|muert[oa]s?|difunt[oa]s?|finad[oa]s?|ya\s+no\s+vive(?!\s+(?:con|en|junt|aqu))|ya\s+no\s+est[aá]\s+(?:con|entre)\s+nosotros)(?![\p{L}])|†|✝`,
+  "iu",
+);
+const DEATH_CHAIN = new RegExp(
+  String.raw`((?:${NAME}${AG}\s*(?:,\s*|\s+(?:y|e)\s+))*${NAME})${AG}\s*[,(]?\s*(?:ya\s+|tambi[eé]n\s+|est[aá]n?\s+|estaba\s+|era\s+|fue\s+)*$`,
+  "u",
+);
+const KIN_OF = String.raw`(?:padre|madre|abuel[oa]|hermano|hermana|hij[oa]|esposo|esposa|marido|mujer|t[ií][oa])\s+de\s+${NAME}\s*,?\s*`;
+
+function namesIn(text: string): string[] {
+  return (text.match(new RegExp(NAME, "gu")) ?? []).map(cleanName).filter(Boolean);
+}
+
+function applyDeath(b: Builder, sentence: string) {
+  const mk = DEATH_RE.exec(sentence);
+  if (!mk) return;
+  const pre = sentence.slice(0, mk.index);
+  const post = sentence.slice(mk.index + mk[0].length);
+
+  let subjects: string[] = [];
+  const chain = DEATH_CHAIN.exec(pre);
+  if (chain) {
+    subjects = namesIn(chain[1]!);
+  } else {
+    const kin = new RegExp(String.raw`^\s*(?:(?:el|la|los|las)\s+)?${KIN_OF}(${NAME})`, "u").exec(post);
+    if (kin) subjects = [cleanName(kin[1]!)];
+    else {
+      const first = namesIn(post)[0];
+      if (first) subjects = [first];
+    }
+  }
+  subjects = subjects.filter(Boolean);
+  if (subjects.length === 0) return;
+
+  const yearAfter = post.match(/\b((?:19|20)\d{2})\b/);
+  const yearBefore = pre.match(/\b((?:19|20)\d{2})\b/g)?.filter((y) => !/naci[oó]\s+en\s+$/i.test(pre.slice(0, pre.indexOf(y))));
+  const deathYear = yearAfter ? Number(yearAfter[1]) : yearBefore?.length ? Number(yearBefore[yearBefore.length - 1]) : null;
+  const ageAt = post.match(/\ba\s+los\s+(\d{1,3})\s*años/i);
+  for (const name of subjects) {
+    getOrCreate(b, name, { deceased: true, deathYear, age: ageAt ? Number(ageAt[1]) : null });
+  }
+}
+
+const PATIENT_KW = String.raw`(?:paciente\s+identificad[oa]|paciente\s+[ií]ndice|paciente|consultante|caso\s+[ií]ndice|persona\s+identificada|pi)`;
+
+/** Returns true when the sentence names an identified patient (so the generic fallback is skipped). */
+function applyPatient(b: Builder, sentence: string): boolean {
+  const flag = (raw: string) => {
+    const name = cleanName(raw);
+    if (name) getOrCreate(b, name, { identifiedPatient: true });
+    return Boolean(name);
+  };
+  let m: RegExpMatchArray | null;
+  if (
+    (m = sentence.match(
+      new RegExp(
+        String.raw`(${NAME})${AG}\s*,?\s*(?:es|ser[aá]|fue|es\s+considerad[oa]\s+como|es\s+considerad[oa])\s+(?:el\s+|la\s+)?${PATIENT_KW}(?![\p{L}])`,
+        "u",
+      ),
+    ))
+  ) {
+    return flag(m[1]!);
+  }
+  if ((m = sentence.match(new RegExp(String.raw`(${NAME})${AG}\s*(?:,\s*|\(\s*)${PATIENT_KW}(?![\p{L}])`, "u")))) {
+    return flag(m[1]!);
+  }
+  if ((m = sentence.match(new RegExp(String.raw`${PATIENT_KW}\s*(?:es|:|,|=)\s*(?:el\s+|la\s+)?(${NAME})`, "u")))) {
+    return flag(m[1]!);
+  }
+  if (/\bsoy\s+(?:el|la)\s+(?:paciente|consultante)\b/i.test(sentence)) {
+    const self = ensureSelf(b);
+    const p = b.persons.find((x) => x.id === self);
+    if (p) p.identifiedPatient = true;
+    return true;
+  }
+  if (/paciente\s+identificad[oa]|consultante|caso\s+[ií]ndice|paciente\s+[ií]ndice/i.test(sentence)) {
+    const first = namesIn(sentence)[0];
+    if (first) getOrCreate(b, first, { identifiedPatient: true });
+    return true;
+  }
+  return false;
+}
+
+const GENDER_UNKNOWN_RE =
+  /g[eé]nero\s+(?:no\s+(?:especificado|especificada|definido|definida|binario|binaria|conocido)|desconocido|desconocida|indefinido|fluido|s\/d|sd|sin\s+(?:datos|especificar|definir))|no\s+binari[oa]e?|(?<![\p{L}])s\/d(?![\p{L}])/iu;
+
+function applyGender(b: Builder, sentence: string) {
+  const mk = GENDER_UNKNOWN_RE.exec(sentence);
+  if (mk) {
+    const head = sentence.slice(0, mk.index);
+    const segment = head.slice(head.lastIndexOf(",") + 1);
+    const inSegment = namesIn(segment);
+    const subject = sentence.match(new RegExp(String.raw`^\s*(${NAME})${AG}\s+(?:es|era|tiene|est[aá])\b`, "u"));
+    const before = namesIn(head);
+    const after = namesIn(sentence.slice(mk.index + mk[0].length));
+    const target =
+      inSegment[inSegment.length - 1] ?? (subject ? cleanName(subject[1]!) : undefined) ?? before[before.length - 1] ?? after[0];
+    if (target) {
+      const id = getOrCreate(b, target);
+      const p = b.persons.find((x) => x.id === id);
+      if (p) {
+        p.gender = "unknown";
+        b.genderLocked.add(p.id);
+      }
+    }
+  }
+  const stated = sentence.match(
+    new RegExp(String.raw`(${NAME})${AG}\s+es\s+(?:un\s+|una\s+)?(mujer|hombre|var[oó]n)(?![\p{L}])`, "u"),
+  );
+  if (stated) {
+    const id = getOrCreate(b, cleanName(stated[1]!));
+    const p = b.persons.find((x) => x.id === id);
+    if (p && !b.genderLocked.has(p.id)) p.gender = stated[2] === "mujer" ? "female" : "male";
+  }
+}
+
+function applyHousehold(b: Builder, sentence: string, lower: string) {
+  const negated = /\bno\s+(?:vive|viven|conviven|convive)\b|\bya\s+no\s+(?:vive|viven)\b|viven\s+separad/.test(lower);
+  const verb = /\b(?:viven|vive|conviven|convive|comparten|comparte|residen|reside)\b/.test(lower);
+  const together = /junt[oa]s?|misma\s+casa|mismo\s+techo|mismo\s+hogar|\bcon\b/.test(lower);
+  const nucleus = /n[uú]cleo\s+familiar|mismo\s+hogar|misma\s+casa|mismo\s+techo/.test(lower);
+  if (negated || !((verb && together) || nucleus)) return;
+  const ids: string[] = [];
+  for (const m of sentence.matchAll(new RegExp(NAME, "gu"))) {
+    const before = sentence.slice(0, m.index);
+    if (/\b(?:en|desde|hacia)\s+(?:la\s+|el\s+|los\s+|las\s+)?$/.test(before)) continue; // places
+    const name = cleanName(m[0]);
+    if (name) ids.push(getOrCreate(b, name));
+  }
+  linkHousehold(b, ids);
+}
+
+function kidTypeFor(kid: NamedPerson, forceAdopted: boolean): RelType {
+  return forceAdopted || kid.adopted ? "adopted" : "parent_child";
+}
+
+function attachKids(b: Builder, parentIds: string[], kids: NamedPerson[], adopted: boolean, defaultGender: Gender | null) {
+  for (const kid of kids) {
+    const cid = getOrCreate(b, kid.name, { age: kid.age, gender: kid.gender ?? defaultGender });
+    for (const pid of parentIds) addRel(b, kidTypeFor(kid, adopted), pid, cid);
+  }
+}
+
+function applyAdoptionAndKids(b: Builder, sentence: string) {
+  let m: RegExpMatchArray | null;
+
+  // "María y Juan adoptaron a Sofía de 8" · "Ana adoptó a Luis" · "Adoptamos a Sofía"
+  const adoptRest = String.raw`adopt(?:aron|[oó]|an|amos|[eé])\s+(?:a\s+)?(?:un[ao]?\s+)?(?:(?:ni[nñ][oa]s?|beb[eé]|hij[oa]s?)\s+)?(?:llamad[oa]s?\s+|de\s+nombre\s+)?[:,]?\s*(?<kids>.+)`;
+  if ((m = sentence.match(new RegExp(String.raw`${PA}(?:\s+(?:y|e)\s+${PB})?\s+${adoptRest}`, "u"))) && m.groups) {
+    const parents = [m.groups["a"], m.groups["b"]]
+      .filter((n): n is string => Boolean(n))
+      .map((n) => getOrCreate(b, cleanName(n)));
+    const kids = parseNamedPeople(m.groups["kids"]!);
+    attachKids(b, parents, kids, true, null);
+  } else if ((m = sentence.match(new RegExp(String.raw`(?:^|,\s*|\by\s+)${adoptRest}`, "u"))) && m.groups) {
+    const kids = parseNamedPeople(m.groups["kids"]!);
+    if (kids.length) {
+      const parents = parentsForChildren(
+        b,
+        sentence,
+        kids.map((k) => k.name),
+      );
+      attachKids(b, parents, kids, true, null);
+    }
+  }
+
+  // "Sofía es hija adoptiva de María y Juan" · "Sofía fue adoptada por María"
+  if (
+    (m = sentence.match(
+      new RegExp(
+        String.raw`${PA}\s+(?:es|era|fue)\s+(?:(?:la|el)\s+)?(?:hij[oa]\s+)?(?:adoptiv[oa]|adoptad[oa])\s+(?:de|por)\s+${PB}(?:\s+(?:y|e)\s+(?<c>${NAME}))?`,
+        "u",
+      ),
+    )) &&
+    m.groups
+  ) {
+    const g: Gender = /hija|adoptada|adoptiva/.test(m[0]) ? "female" : "male";
+    const child = getOrCreate(b, cleanName(m.groups["a"]!), { gender: g });
+    for (const n of [m.groups["b"], m.groups["c"]]) {
+      if (n) addRel(b, "adopted", getOrCreate(b, cleanName(n)), child);
+    }
+  } else if ((m = sentence.match(new RegExp(String.raw`${PA}\s+(?:es|era|fue)\s+adoptad([oa])\s*$`, "u"))) && m.groups) {
+    const name = cleanName(m.groups["a"]!);
+    const child = getOrCreate(b, name, { gender: m[3] === "a" ? "female" : "male" });
+    for (const pid of parentsForChildren(b, sentence, [name])) addRel(b, "adopted", pid, child);
+  }
+
+  // "Los hijos de María y Juan son Laura y Pedro" · "Su hija se llama Laura" · "Sus hijos son ..."
+  if (
+    (m = sentence.match(
+      new RegExp(
+        String.raw`hij([oa])s?\s+(?<adop>adoptiv[oa]s?\s+)?de\s+${PA}(?:\s+(?:y|e)\s+${PB})?\s+(?:son|es|se\s+llama[n]?)\s*:?\s*(?<kids>.+)`,
+        "u",
+      ),
+    )) &&
+    m.groups
+  ) {
+    const parents = [m.groups["a"], m.groups["b"]]
+      .filter((n): n is string => Boolean(n))
+      .map((n) => getOrCreate(b, cleanName(n)));
+    const g: Gender | null = /hijas?\b/.test(m[0]) ? "female" : /hijo\b/.test(m[0]) ? "male" : null;
+    attachKids(b, parents, parseNamedPeople(m.groups["kids"]!), Boolean(m.groups["adop"]), g);
+    if (parents.length === 2) ensureUnion(b, parents[0]!, parents[1]!);
+  } else if (
+    (m = sentence.match(
+      new RegExp(String.raw`(?:^|\s)sus?\s+hij([oa])s?\s+(?<adop>adoptiv[oa]s?\s+)?(?:son|es|se\s+llama[n]?)\s*:?\s*(?<kids>.+)`, "u"),
+    )) &&
+    m.groups
+  ) {
+    const kids = parseNamedPeople(m.groups["kids"]!);
+    if (kids.length) {
+      const parents = parentsForChildren(
+        b,
+        sentence,
+        kids.map((k) => k.name),
+      );
+      const g: Gender | null = /hijas?\b/.test(m[0]) ? "female" : /hijo\b/.test(m[0]) ? "male" : null;
+      attachKids(b, parents, kids, Boolean(m.groups["adop"]), g);
+    }
+  }
+
+  // "Laura y Pedro son hijos de María y Juan" · "Laura y Pedro son sus hijos"
+  if (
+    (m = sentence.match(
+      new RegExp(
+        String.raw`(?<kids>${NAME_LIST})\s+son\s+(?:los\s+|las\s+)?hij([oa])s\s+(?<adop>adoptiv[oa]s\s+)?de\s+${PA}(?:\s+(?:y|e)\s+${PB})?`,
+        "u",
+      ),
+    )) &&
+    m.groups
+  ) {
+    const parents = [m.groups["a"], m.groups["b"]]
+      .filter((n): n is string => Boolean(n))
+      .map((n) => getOrCreate(b, cleanName(n)));
+    attachKids(b, parents, parseNamedPeople(m.groups["kids"]!), Boolean(m.groups["adop"]), null);
+    if (parents.length === 2) ensureUnion(b, parents[0]!, parents[1]!);
+  } else if (
+    (m = sentence.match(new RegExp(String.raw`(?<kids>${NAME_LIST})\s+son\s+sus\s+hij([oa])s(?<adop>\s+adoptiv[oa]s)?`, "u"))) &&
+    m.groups
+  ) {
+    const kids = parseNamedPeople(m.groups["kids"]!);
+    const parents = parentsForChildren(
+      b,
+      sentence,
+      kids.map((k) => k.name),
+    );
+    attachKids(b, parents, kids, Boolean(m.groups["adop"]), null);
+  }
 }
 
 export function parseFamilyText(text: string): GenogramData {
@@ -451,7 +916,9 @@ export function parseFamilyText(text: string): GenogramData {
   if (!cleaned) return { persons: [], relationships: [] };
 
   const sentences = cleaned
-    .split(/[\.\n;]+/)
+    // "Elena, que está divorciada de Mario" → keep the subject: "Elena está divorciada de Mario"
+    .replace(/,\s*(?:que|quien)\s+/giu, " ")
+    .split(/[\.\n;]+|\s+(?:pero|mientras(?:\s+que)?|aunque)\s+/iu)
     .map((s) => s.trim())
     .filter(Boolean);
 
@@ -459,12 +926,8 @@ export function parseFamilyText(text: string): GenogramData {
 
   for (const sentence of sentences) {
     const lower = sentence.toLowerCase();
-    const deceased = /falleci[oó]|muri[oó]|difunt[oa]|está fallecid|ya no vive/.test(lower);
-    const deathYearMatch = lower.match(/falleci[oó]\s+en\s+(\d{4})|muri[oó]\s+en\s+(\d{4})|en\s+(\d{4})\s+falleci/);
-    const deathYear = deathYearMatch ? Number(deathYearMatch[1] || deathYearMatch[2] || deathYearMatch[3]) : null;
     const birthYearMatch = lower.match(/naci[oó]\s+en\s+(\d{4})/);
     const birthYear = birthYearMatch ? Number(birthYearMatch[1]) : null;
-    const identified = /paciente identificad[oa]|consultante|caso [ií]ndice/.test(lower);
 
     let m: RegExpMatchArray | null;
 
@@ -504,12 +967,12 @@ export function parseFamilyText(text: string): GenogramData {
       const p2 = getOrCreate(b, cleanName(misPadres[2]));
       addRel(b, "parent_child", p1, self);
       addRel(b, "parent_child", p2, self);
-      addRel(b, "marriage", p1, p2);
+      ensureUnion(b, p1, p2);
     }
 
     const miPariente = sentence.match(
       new RegExp(
-        `mi\\s+(padre|madre|hermano|hermana|esposo|esposa|marido|mujer|exesposo|exesposa)\\s+(?:se\\s+llama|es)\\s+(${NAME})(?:\\s+${AGE})?`,
+        `mi\\s+(padre|madre|hermano|hermana|esposo|esposa|marido|mujer|exesposo|exesposa|exmarido|exmujer|novio|novia|pareja|hijo|hija)\\s+(?:se\\s+llama|es)\\s+(${NAME})(?:\\s+${AGE})?`,
         "u",
       ),
     );
@@ -527,7 +990,10 @@ export function parseFamilyText(text: string): GenogramData {
       const self = ensureSelf(b, { gender: selfG ?? null });
       if (role === "padre" || role === "madre") addRel(b, "parent_child", other, self);
       else if (role === "hermano" || role === "hermana") addRel(b, "sibling", self, other);
-      else if (role === "exesposo" || role === "exesposa") addRel(b, "divorce", self, other);
+      else if (role === "hijo" || role === "hija") addRel(b, "parent_child", self, other);
+      else if (role === "novio" || role === "novia") addRel(b, "dating", self, other);
+      else if (role === "pareja") addRel(b, "cohabitation", self, other);
+      else if (role.startsWith("ex")) addRel(b, "divorce", self, other);
       else addRel(b, "marriage", self, other);
     }
 
@@ -537,7 +1003,7 @@ export function parseFamilyText(text: string): GenogramData {
     );
     const marriageRe2 = new RegExp(`(${NAME})\\s+(?:y|e)\\s+(${NAME})\\s+(?:est[aá]n\\s+)?casad[oa]s`, "u");
     const spouseRe = new RegExp(
-      `(${NAME})\\s+(?:es\\s+)?(?:el\\s+|la\\s+)?(esposo|esposa|marido|mujer|exesposo|exesposa)\\s+de\\s+(${NAME})`,
+      `(${NAME})\\s+(?:es\\s+)?(?:el\\s+|la\\s+)?(esposo|esposa|marido|mujer|exesposo|exesposa|exmarido|exmujer)\\s+de\\s+(${NAME})`,
       "u",
     );
     const cohabRe = new RegExp(`(${NAME})(?:\\s+${AGE})?\\s+(?:vive|convive)\\s+con\\s+(${NAME})`, "u");
@@ -565,7 +1031,7 @@ export function parseFamilyText(text: string): GenogramData {
       const n1 = cleanName(m[1]);
       const n2 = cleanName(m[3]);
       const g1: Gender = m[2] === "a" ? "female" : "male";
-      addRel(b, "marriage", getOrCreate(b, n1, { gender: g1 }), getOrCreate(b, n2, { deceased: true }));
+      addRel(b, "widowed", getOrCreate(b, n1, { gender: g1 }), getOrCreate(b, n2, { deceased: true }));
     } else if ((m = sentence.match(cohabRe))) {
       const n1 = cleanName(m[1]);
       const n2 = cleanName(m[3]);
@@ -623,12 +1089,12 @@ export function parseFamilyText(text: string): GenogramData {
       `(${NAME})\\s+(?:y|e)\\s+(${NAME})\\s+(?:son|fueron)\\s+(?:los\\s+)?padres\\s+de\\s+(${NAME})`,
       "u",
     );
-    const childOfRe = new RegExp(`(${NAME})\\s+(?:es|era)\\s+hij([oa])\\s+de\\s+(${NAME})(?:\\s+(?:y|e)\\s+(${NAME}))?`, "u");
+    const childOfRe = new RegExp(`(${NAME})${AG}\\s+(?:es|era)\\s+(?:el\\s+|la\\s+)?hij([oa])\\s+de\\s+(${NAME})${AG}(?:\\s+(?:y|e)\\s+(${NAME}))?`, "u");
     const fatherRe = new RegExp(`(?:el\\s+)?padre\\s+de\\s+(${NAME})\\s+(?:es|se\\s+llama)\\s+(${NAME})`, "u");
     const motherRe = new RegExp(`(?:la\\s+)?madre\\s+de\\s+(${NAME})\\s+(?:es|se\\s+llama)\\s+(${NAME})`, "u");
-    const isFatherRe = new RegExp(`(${NAME})\\s+es\\s+(?:el\\s+)?padre\\s+de\\s+(${NAME})`, "u");
-    const isMotherRe = new RegExp(`(${NAME})\\s+es\\s+(?:la\\s+)?madre\\s+de\\s+(${NAME})`, "u");
-    const adoptedRe = new RegExp(`(${NAME})\\s+(?:fue\\s+)?adoptad([oa])\\s+por\\s+(${NAME})(?:\\s+(?:y|e)\\s+(${NAME}))?`, "u");
+    const isFatherRe = new RegExp(`(${NAME})${AG}\\s+(?:es|era|fue)\\s+(?:el\\s+)?padre\\s+de\\s+(${NAME_LIST})`, "u");
+    const isMotherRe = new RegExp(`(${NAME})${AG}\\s+(?:es|era|fue)\\s+(?:la\\s+)?madre\\s+de\\s+(${NAME_LIST})`, "u");
+    const adoptedRe = new RegExp(`(${NAME})${AG}\\s+(?:es\\s+|fue\\s+)?adoptad([oa])\\s+por\\s+(${NAME})(?:\\s+(?:y|e)\\s+(${NAME}))?`, "u");
 
     if ((m = sentence.match(parentsRe))) {
       const child = getOrCreate(b, cleanName(m[1]));
@@ -636,14 +1102,14 @@ export function parseFamilyText(text: string): GenogramData {
       const p2 = getOrCreate(b, cleanName(m[3]));
       addRel(b, "parent_child", p1, child);
       addRel(b, "parent_child", p2, child);
-      addRel(b, "marriage", p1, p2);
+      ensureUnion(b, p1, p2);
     } else if ((m = sentence.match(parentsOfRe))) {
       const p1 = getOrCreate(b, cleanName(m[1]));
       const p2 = getOrCreate(b, cleanName(m[2]));
       const child = getOrCreate(b, cleanName(m[3]));
       addRel(b, "parent_child", p1, child);
       addRel(b, "parent_child", p2, child);
-      addRel(b, "marriage", p1, p2);
+      ensureUnion(b, p1, p2);
     } else if ((m = sentence.match(childOfRe))) {
       const child = getOrCreate(b, cleanName(m[1]), { gender: m[2] === "a" ? "female" : "male" });
       const p1 = getOrCreate(b, cleanName(m[3]));
@@ -651,14 +1117,18 @@ export function parseFamilyText(text: string): GenogramData {
       if (m[4]) {
         const p2 = getOrCreate(b, cleanName(m[4]));
         addRel(b, "parent_child", p2, child);
-        addRel(b, "marriage", p1, p2);
+        ensureUnion(b, p1, p2);
       }
     } else if ((m = sentence.match(isFatherRe))) {
       const father = getOrCreate(b, cleanName(m[1]), { gender: "male" });
-      addRel(b, "parent_child", father, getOrCreate(b, cleanName(m[2])));
+      for (const kid of parseNamedPeople(m[2])) {
+        addRel(b, "parent_child", father, getOrCreate(b, kid.name, { age: kid.age, gender: kid.gender }));
+      }
     } else if ((m = sentence.match(isMotherRe))) {
       const mother = getOrCreate(b, cleanName(m[1]), { gender: "female" });
-      addRel(b, "parent_child", mother, getOrCreate(b, cleanName(m[2])));
+      for (const kid of parseNamedPeople(m[2])) {
+        addRel(b, "parent_child", mother, getOrCreate(b, kid.name, { age: kid.age, gender: kid.gender }));
+      }
     } else if ((m = sentence.match(fatherRe))) {
       const child = getOrCreate(b, cleanName(m[1]));
       const father = getOrCreate(b, cleanName(m[2]), { gender: "male" });
@@ -674,7 +1144,7 @@ export function parseFamilyText(text: string): GenogramData {
       if (m[4]) {
         const p2 = getOrCreate(b, cleanName(m[4]));
         addRel(b, "adopted", p2, child);
-        addRel(b, "marriage", p1, p2);
+        ensureUnion(b, p1, p2);
       }
     }
 
@@ -686,7 +1156,7 @@ export function parseFamilyText(text: string): GenogramData {
       const child = getOrCreate(b, cleanName(m[2]));
       const g1 = getOrCreate(b, cleanName(m[3]));
       const g2 = getOrCreate(b, cleanName(m[4]));
-      addRel(b, "marriage", g1, g2);
+      ensureUnion(b, g1, g2);
       const side = (m[1] ?? "").toLowerCase();
       const existingParents = parentsOf(b, child);
       let mid: string | null = null;
@@ -713,7 +1183,7 @@ export function parseFamilyText(text: string): GenogramData {
     }
 
     const childrenRe = new RegExp(
-      `(?:tienen|tiene|tuvieron|tuvo|tengo|tuve|tenemos|tuvimos)\\s+(?:un|una|uno|dos|tres|cuatro|cinco|seis|\\d+)?\\s*hijos?\\s*(?:llamad[oa]s?)?\\s*[:,]?\\s*(.+)`,
+      `(?:tienen|tiene|tuvieron|tuvo|tengo|tuve|tenemos|tuvimos)\\s+(?:con\\s+${NAME}\\s+)?(?:un|una|uno|otr[oa]|dos|tres|cuatro|cinco|seis|\\d+)?\\s*(hij[oa]s?)\\s*(adoptiv[oa]s?|adoptad[oa]s?)?\\s*(?:llamad[oa]s?)?\\s*[:,]?\\s*(.+)`,
       "iu",
     );
     const childrenRe2 = new RegExp(
@@ -721,17 +1191,19 @@ export function parseFamilyText(text: string): GenogramData {
       "iu",
     );
     if ((m = sentence.match(childrenRe))) {
-      const kids = parseNamedPeople(m[1]);
+      const kids = parseNamedPeople(m[3]);
       if (kids.length > 0) {
-        const parentIds = parentsForChildren(
-          b,
-          sentence,
-          kids.map((k) => k.name),
-        );
-        for (const kid of kids) {
-          const cid = getOrCreate(b, kid.name, { age: kid.age, gender: kid.gender });
-          for (const pid of parentIds) addRel(b, "parent_child", pid, cid);
-        }
+        const kidNames = kids.map((k) => k.name);
+        const lead = sentence.slice(0, (m.index ?? 0) + m[0].length - m[3].length);
+        const leadIds = namesIn(lead)
+          .filter((n) => !kidNames.includes(n))
+          .map((n) => getOrCreate(b, n));
+        const parentIds = leadIds.length
+          ? [...new Set(leadIds)]
+          : parentsForChildren(b, sentence, kidNames);
+        const word = m[1].toLowerCase();
+        const defaultGender: Gender | null = word === "hija" || word === "hijas" ? "female" : word === "hijo" ? "male" : null;
+        attachKids(b, parentIds, kids, Boolean(m[2]), defaultGender);
       }
     } else if ((m = sentence.match(childrenRe2))) {
       const g: Gender = m[1] === "a" ? "female" : "male";
@@ -741,13 +1213,13 @@ export function parseFamilyText(text: string): GenogramData {
     }
 
     const sibRe = new RegExp(
-      `(${NAME})\\s+tiene\\s+(?:una?|dos|tres|\\d+)?\\s*herman([oa])s?\\s+(?:llamad[oa]s?\\s+)?(?:[:,]?\\s*)(.+)`,
+      `(${NAME})${AG}\\s+tiene\\s+(?:una?|otr[oa]|dos|tres|\\d+)?\\s*herman([oa])s?\\s+(?:llamad[oa]s?\\s+)?(?:[:,]?\\s*)(.+)`,
       "u",
     );
     const sibRe2 = new RegExp(`(${NAME})(?:\\s*,\\s*(${NAME}))*\\s+(?:y|e)\\s+(${NAME})\\s+son\\s+herman[oa]s`, "u");
-    const sibRe3 = new RegExp(`(${NAME})\\s+es\\s+herman([oa])\\s+de\\s+(${NAME})`, "u");
+    const sibRe3 = new RegExp(`(${NAME})${AG}\\s+es\\s+(?:el\\s+|la\\s+)?herman([oa])\\s+de\\s+(${NAME})`, "u");
     const tengoHermano = sentence.match(
-      new RegExp(`tengo\\s+(?:una?|dos|tres|\\d+)?\\s*herman([oa])s?\\s+(?:llamad[oa]s?\\s+)?(?:[:,]?\\s*)(.+)`, "u"),
+      new RegExp(`tengo\\s+(?:una?|otr[oa]|dos|tres|\\d+)?\\s*herman([oa])s?\\s+(?:llamad[oa]s?\\s+)?(?:[:,]?\\s*)(.+)`, "u"),
     );
     if ((m = sentence.match(sibRe2))) {
       const names = [m[1], m[2], m[3]].filter(Boolean).map(cleanName);
@@ -801,45 +1273,33 @@ export function parseFamilyText(text: string): GenogramData {
       addRel(b, "cutoff", getOrCreate(b, cleanName(m[1])), getOrCreate(b, cleanName(m[2])));
     }
 
+    applyLinks(b, sentence);
+    applyAdoptionAndKids(b, sentence);
+    applyHousehold(b, sentence, lower);
+
     const simple = sentence.matchAll(new RegExp(`(${NAME})\\s+${AGE}`, "gu"));
     for (const sm of simple) {
       const name = cleanName(sm[1]);
       if (!name) continue;
-      getOrCreate(b, name, {
-        age: Number(sm[2]),
-        deceased: deceased,
-        deathYear,
-        birthYear,
-        identifiedPatient: identified,
-      });
+      getOrCreate(b, name, { age: Number(sm[2]) });
     }
 
-    if (deceased) {
-      const names = sentence.match(new RegExp(NAME, "gu")) ?? [];
-      for (const n of names) {
-        const name = cleanName(n);
-        if (!name) continue;
-        getOrCreate(b, name, { deceased: true, deathYear });
-      }
+    for (const am of sentence.matchAll(new RegExp(`(${NAME})[^\\p{Lu}.]{0,40}?\\btiene\\s+(\\d{1,3})\\s*años`, "gu"))) {
+      const name = cleanName(am[1]!);
+      if (name && !/^(?:hij|herman)/i.test(name)) getOrCreate(b, name, { age: Number(am[2]) });
     }
 
-    if (identified) {
-      const names = sentence.match(new RegExp(NAME, "gu")) ?? [];
-      for (const n of names) {
-        const name = cleanName(n);
-        if (!name) continue;
-        getOrCreate(b, name, { identifiedPatient: true });
-      }
-    }
+    applyDeath(b, sentence);
+    applyPatient(b, sentence);
 
     if (birthYear) {
-      const names = sentence.match(new RegExp(NAME, "gu")) ?? [];
-      for (const n of names) {
-        const name = cleanName(n);
-        if (!name) continue;
-        getOrCreate(b, name, { birthYear });
-      }
+      const mk = /naci[oó]/i.exec(sentence);
+      const before = mk ? namesIn(sentence.slice(0, mk.index)) : [];
+      const target = before[before.length - 1] ?? namesIn(sentence)[0];
+      if (target) getOrCreate(b, target, { birthYear });
     }
+
+    applyGender(b, sentence);
   }
 
   for (const r of [...b.relationships]) {
@@ -868,6 +1328,33 @@ export function parseFamilyText(text: string): GenogramData {
     );
     if (!hasUnion) addRel(b, "marriage", unique[0]!, unique[1]!);
   }
+
+  // "vive con" between parent/child or siblings is a shared home, not a couple.
+  const kinPair = (x: string, y: string) =>
+    b.relationships.some(
+      (r) =>
+        (PARENT_TYPES.includes(r.type) || r.type === "sibling") &&
+        ((r.a === x && r.b === y) || (r.a === y && r.b === x)),
+    );
+  b.relationships = b.relationships.filter((r) => r.type !== "cohabitation" || !kinPair(r.a, r.b));
+
+  // One union state per couple: divorce/widowhood > separation > marriage > cohabitation > dating.
+  const UNION_RANK: Partial<Record<RelType, number>> = {
+    dating: 0,
+    cohabitation: 1,
+    marriage: 2,
+    separation: 3,
+    divorce: 4,
+    widowed: 4,
+  };
+  b.relationships = b.relationships.filter((r) => {
+    const rank = UNION_RANK[r.type];
+    if (rank == null) return true;
+    return !b.relationships.some((o) => {
+      const orank = UNION_RANK[o.type];
+      return o !== r && orank != null && orank > rank && ((o.a === r.a && o.b === r.b) || (o.a === r.b && o.b === r.a));
+    });
+  });
 
   if (allTogether) {
     linkHousehold(

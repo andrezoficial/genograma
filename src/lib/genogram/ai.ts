@@ -7,6 +7,8 @@ const REL_TYPES: RelType[] = [
   "cohabitation",
   "separation",
   "divorce",
+  "widowed",
+  "dating",
   "parent_child",
   "adopted",
   "sibling",
@@ -116,7 +118,7 @@ export const parseFamilyWithAi = createServerFn({ method: "POST" })
             {
               role: "system",
               content:
-                "Eres un experto en genogramas clínicos. Extrae personas y vínculos de una descripción familiar en español. Responde SOLO JSON válido con esta forma: {\"persons\":[{\"name\",\"gender\":\"male|female|unknown\",\"age\":null,\"birthYear\":null,\"deathYear\":null,\"deceased\":false,\"occupation\":\"\",\"notes\":\"\",\"identifiedPatient\":false,\"household\":null}],\"relationships\":[{\"type\":\"marriage|cohabitation|separation|divorce|parent_child|adopted|sibling|close|distant|cutoff|conflict\",\"from\":\"Nombre\",\"to\":\"Nombre\"}]}. En parent_child, from es el progenitor y to el hijo. No inventes gente que no esté en el texto. Si un hermano comparte padres, incluye también parent_child a esos padres. Si el texto dice que conviven o viven juntos, pon el mismo número entero en household (empezando en 1) a quienes viven en el mismo núcleo. identifiedPatient true solo para quien el texto marca como paciente identificado o consultante.",
+                "Eres un experto en genogramas clínicos. Extrae personas y vínculos de una descripción familiar en español. Responde SOLO JSON válido con esta forma: {\"persons\":[{\"name\",\"gender\":\"male|female|unknown\",\"age\":null,\"birthYear\":null,\"deathYear\":null,\"deceased\":false,\"occupation\":\"\",\"notes\":\"\",\"identifiedPatient\":false,\"household\":null}],\"relationships\":[{\"type\":\"marriage|cohabitation|separation|divorce|widowed|dating|parent_child|adopted|sibling|close|distant|cutoff|conflict\",\"from\":\"Nombre\",\"to\":\"Nombre\"}]}. cohabitation es unión libre; widowed es viudez (el cónyuge fallecido va en persons con deceased true); dating es noviazgo. En parent_child, from es el progenitor y to el hijo. No inventes gente que no esté en el texto. Si un hermano comparte padres, incluye también parent_child a esos padres. Si el texto dice que conviven o viven juntos, pon el mismo número entero en household (empezando en 1) a quienes viven en el mismo núcleo. identifiedPatient true solo para quien el texto marca como paciente identificado o consultante.",
             },
             { role: "user", content: data.text },
           ],

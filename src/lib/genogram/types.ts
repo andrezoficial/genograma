@@ -5,6 +5,8 @@ export type StructuralRelType =
   | "cohabitation"
   | "separation"
   | "divorce"
+  | "widowed"
+  | "dating"
   | "parent_child"
   | "adopted"
   | "sibling";
@@ -58,15 +60,19 @@ export const UNION_TYPES: RelType[] = [
   "cohabitation",
   "separation",
   "divorce",
+  "widowed",
+  "dating",
 ];
 
 export const PARENT_TYPES: RelType[] = ["parent_child", "adopted"];
 
 export const REL_LABELS: Record<RelType, string> = {
-  marriage: "Matrimonio / pareja",
-  cohabitation: "Unión de hecho",
-  separation: "Separación",
-  divorce: "Divorcio",
+  marriage: "Casados / matrimonio",
+  cohabitation: "Unión libre (de hecho)",
+  separation: "Separados/as",
+  divorce: "Divorciados/as",
+  widowed: "Viudez (pareja fallecida)",
+  dating: "Noviazgo / pareja sin convivir",
   parent_child: "Padre/madre → hijo/a",
   adopted: "Adopción",
   sibling: "Hermanos",

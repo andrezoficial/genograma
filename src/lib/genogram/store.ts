@@ -60,6 +60,7 @@ type State = {
   removePerson: (id: string) => void;
   addRelationship: (type: RelType, a: string, b: string) => void;
   removeRelationship: (id: string) => void;
+  updateRelationshipType: (id: string, type: RelType) => void;
   linkHousehold: (a: string, b: string) => void;
   setHouseholdLabel: (id: number, label: string) => void;
   moveHouseholdLabel: (id: number, dx: number, dy: number) => void;
@@ -344,6 +345,18 @@ export const useGenogram = create<State>((set, get) => ({
       epoch: get().epoch + 1,
       layoutEpoch: get().layoutEpoch + 1,
       panel: "lienzo",
+    });
+    get().persist();
+  },
+
+  updateRelationshipType: (id, type) => {
+    const { persons, relationships, households, past } = get();
+    const nextRels = relationships.map((r) => (r.id === id ? { ...r, type } : r));
+    set({
+      past: [...past, snap({ persons, relationships, households })].slice(-40),
+      future: [],
+      relationships: nextRels,
+      status: "Tipo de vínculo actualizado.",
     });
     get().persist();
   },
