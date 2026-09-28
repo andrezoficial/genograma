@@ -97,6 +97,11 @@ function capitalizeSurnames(text: string): string {
 function normalize(text: string, notes: Map<string, string>): string {
   let t = text
     .replace(/\r/g, "")
+    // WhatsApp / chat headers: "[5:16 p. m., 28/9/2026] Amor 🐨🧨:" · "28/9/2026, 5:16 p. m. - Amor:"
+    .replace(/^[ \t]*\[[^\]\n]{3,40}\][^:\n]{0,40}:[ \t]*/gmu, "")
+    .replace(/(?:^|(?<=\s))\[\d{1,2}:\d{2}[^\]\n]{0,30}\][^:\n]{0,40}:[ \t]*/gmu, "")
+    .replace(/^[ \t]*\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}[^-\n]{0,12}-[^:\n]{0,40}:[ \t]*/gmu, "")
+    .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, "")
     .replace(/[ \t]+/g, " ")
     .replace(/\s+([,.:;])/g, "$1")
     .replace(/^[ \t]*(?:[-*•·▪‣]|\d+[.)])[ \t]+/gmu, "");
@@ -256,6 +261,33 @@ function mergeNicknames(reg: Registry, remap: Map<string, string>) {
   }
 }
 
+/** "Oliverio Escarraga" and "Oliver Escarraga", both 83 and deceased, are one person written twice. */
+function mergeVariants(reg: Registry, remap: Map<string, string>) {
+  const same = (a: Person, b: Person) => {
+    const ta = nameTokens(a.name);
+    const tb = nameTokens(b.name);
+    if (ta.length !== tb.length || a.age == null || a.age !== b.age) return false;
+    if (a.deceased !== b.deceased) return false;
+    return ta.every((t, i) => t === tb[i] || nick(t, tb[i]!));
+  };
+  for (let i = 0; i < reg.persons.length; i++) {
+    for (let j = reg.persons.length - 1; j > i; j--) {
+      const keep = reg.persons[i]!;
+      const drop = reg.persons[j]!;
+      if (!same(keep, drop)) continue;
+      if (nameTokens(keep.name).join(" ") !== nameTokens(drop.name).join(" ")) {
+        const alt = `También aparece como «${drop.name}».`;
+        keep.notes = keep.notes ? `${keep.notes} ${alt}` : alt;
+      }
+      keep.birthYear ??= drop.birthYear;
+      keep.deathYear ??= drop.deathYear;
+      if (keep.gender === "unknown") keep.gender = drop.gender;
+      remap.set(drop.id, keep.id);
+      reg.persons.splice(j, 1);
+    }
+  }
+}
+
 function resolveMention(reg: Registry, m: Mention, exclude: Set<string>, preferDeceased = false): string | null {
   if (m.pid && reg.persons.some((p) => p.id === m.pid)) return m.pid;
   if (m.tokens.length === 1 && reg.aliases.has(m.tokens[0]!)) return reg.aliases.get(m.tokens[0]!)!;
@@ -353,6 +385,7 @@ export function parseNarrative(text: string, opts: NarrativeOptions = {}): Genog
 
   /* ---------- pass 1: people ---------- */
   for (const { s, ms } of parsed) {
+    hintDeathAge(s, ms);
     for (const m of ms) {
       const id = declare(reg, m);
       if (id && (m.tokens.length >= 2 || m.age != null)) m.pid = id;
@@ -360,6 +393,7 @@ export function parseNarrative(text: string, opts: NarrativeOptions = {}): Genog
     applyDeath(reg, s, ms, year);
   }
   const remap = new Map<string, string>();
+  mergeVariants(reg, remap);
   mergeNicknames(reg, remap);
   for (const { ms } of parsed) for (const m of ms) if (m.pid && remap.has(m.pid)) m.pid = remap.get(m.pid);
 
@@ -500,6 +534,16 @@ export function parseNarrative(text: string, opts: NarrativeOptions = {}): Genog
 /* ------------------------------------------------------------------ */
 
 const DEATH_WORD = /falleci(?:[oó]|eron|d[oa]s?)|muri(?:[oó]|eron)|difunt[oa]|finad[oa]|†/i;
+
+/** The age of the deceased ("a la edad de 83") is known before the person is matched, so homonyms stay apart. */
+function hintDeathAge(s: string, ms: Mention[]) {
+  const dm = DEATH_WORD.exec(s);
+  if (!dm) return;
+  const age = /(?:a\s+la\s+edad\s+de|a\s+los)\s+(\d{1,3})(?:\s*años?)?/i.exec(s);
+  if (!age) return;
+  const target = [...ms].reverse().find((m) => m.end <= dm.index);
+  if (target && target.age == null) target.age = Number(age[1]);
+}
 
 function applyDeath(reg: Registry, s: string, ms: Mention[], year: number) {
   const dm = DEATH_WORD.exec(s);

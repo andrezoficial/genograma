@@ -33,6 +33,32 @@ export function autoLayout(persons: Person[], relationships: Relationship[]): Pe
     return d;
   }
   ids.forEach(depth);
+
+  // A partner who has no parents of their own belongs on the same row as their partner
+  // (otherwise they float on the top row, far away from the couple's children).
+  for (let pass = 0; pass < 20; pass++) {
+    let changed = false;
+    for (const r of relationships) {
+      if (!UNION_TYPES.includes(r.type)) continue;
+      const ga = gen.get(r.a) ?? 0;
+      const gb = gen.get(r.b) ?? 0;
+      if (ga === gb) continue;
+      const low = ga < gb ? r.a : r.b;
+      if ((parentsOf.get(low) ?? []).length === 0) {
+        gen.set(low, Math.max(ga, gb));
+        changed = true;
+      }
+    }
+    for (const r of relationships) {
+      if (!PARENT_TYPES.includes(r.type)) continue;
+      const need = (gen.get(r.a) ?? 0) + 1;
+      if ((gen.get(r.b) ?? 0) < need) {
+        gen.set(r.b, need);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
   const minGen = Math.min(...[...gen.values()]);
   ids.forEach((id) => gen.set(id, (gen.get(id) ?? 0) - minGen));
 
@@ -144,7 +170,8 @@ export function autoLayout(persons: Person[], relationships: Relationship[]): Pe
     }
 
     rows.forEach((row) => {
-      const sorted = [...row].sort((a, b) => byId.get(a)!.x - byId.get(b)!.x);
+      // keep the order chosen above (couples side by side); only spacing is enforced here
+      const sorted = row;
       for (let i = 1; i < sorted.length; i++) {
         const prev = byId.get(sorted[i - 1])!;
         const cur = byId.get(sorted[i])!;

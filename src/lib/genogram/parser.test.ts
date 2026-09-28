@@ -387,3 +387,39 @@ test("narrative: household is only the people listed", () => {
   ]);
   assert.equal(new Set(d.persons.map((p) => p.household).filter((h) => h != null)).size, 1);
 });
+
+/* ---------------- pasted chat: two copies, WhatsApp header, nickname for the father ---------------- */
+
+const CHAT_PASTE = `Oliverio Escarraga fallecido hace 6 años , a la edad de 83 años , compartió unión de hecho con Elena Ceballos de 63 años, ambos tenían vínculo emocional distante. Tuvieron tres hijos :
+Marinella Escarraga de 53 años , quien tiene vínculo emocional estrecho con Elena , Oliverio , Yaneth y con Oliver comparte un vínculo distante
+Oliver Escarraga de 43 años quien tiene vínculo emocional distante con Elena , Oliverio , Yaneth y Marinella.
+[5:16 p. m., 28/9/2026] Amor 🐨🧨: Oliver Escarraga fallecido hace 6 años , a la edad de 83 años , compartió unión de hecho con Elena Ceballos de 63 años, ambos tenían vínculo emocional distante. Tuvieron tres hijos :
+Marinella Escarraga de 53 años , quien tiene vínculo emocional estrecho con Elena , Oliverio , Yaneth y con Oliver comparte un vínculo distante
+Yaneth Escarraga de 47 años , quien tiene vínculo emocional estrecho con Elena , Oliverio , Marinella y con Oliver comparte un vínculo distante
+Oliver Escarraga de 43 años quien tiene vínculo emocional distante con Elena , Oliverio , Yaneth y Marinella.`;
+
+test("chat paste: header removed and the duplicated father is a single person", () => {
+  const d = parseFamilyText(CHAT_PASTE, { currentYear: 2026 });
+  assert.ok(!d.persons.some((p) => /amor/i.test(p.name)), "no person from the chat header");
+  assert.deepEqual(names(d), ["Elena Ceballos", "Marinella Escarraga", "Oliver Escarraga", "Oliverio Escarraga", "Yaneth Escarraga"]);
+  const dead = d.persons.filter((p) => p.deceased);
+  assert.equal(dead.length, 1);
+  assert.equal(dead[0]!.name, "Oliverio Escarraga");
+  assert.equal(d.persons.find((p) => p.name === "Oliver Escarraga")?.deceased, false);
+  // kids are not duplicated
+  const kids = d.relationships.filter((r) => r.type === "parent_child" && r.a === dead[0]!.id);
+  assert.equal(kids.length, 3);
+});
+
+test("layout: a partner without parents sits on the row of their partner", async () => {
+  const { autoLayout } = await import("./layout.ts");
+  const d = parseFamilyText(NARRATIVE, { currentYear: 2026 });
+  const laid = autoLayout(d.persons, d.relationships);
+  const gen = (n: string) => laid.find((p) => p.name === n)!.generation;
+  assert.equal(gen("Edgar"), gen("Marinella Escarraga"));
+  assert.equal(gen("César Bueno"), gen("Marinella Escarraga"));
+  assert.equal(gen("Miguel Ángel Montañez"), gen("Yaneth Escarraga"));
+  const son = laid.find((p) => p.name === "Oliver Escarraga" && p.age === 43)!;
+  assert.equal(gen("Judith Marciales"), son.generation);
+  assert.ok(gen("Camilo Escarraga") > gen("Edgar"));
+});
