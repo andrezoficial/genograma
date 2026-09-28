@@ -295,3 +295,95 @@ test("living with a parent is a shared home, not a couple", () => {
   assert.ok(!d.relationships.some((r) => r.type === "cohabitation"));
   assert.equal(person(d, "Ana").household, person(d, "Carmen").household);
 });
+
+/* ---------------- narrative style (one paragraph per person) ---------------- */
+
+const NARRATIVE = `Oliver Escarraga fallecido hace 6 años , a la edad de 83 años , compartió unión de hecho con Elena Ceballos de 63 años, ambos tenían vínculo emocional distante. Tuvieron tres hijos :
+Marinella Escarraga de 53 años , quien tiene vínculo emocional estrecho con Elena , Oliverio , Yaneth y con Oliver comparte un vínculo distante 
+Yaneth Escarraga de 47 años , quien tiene vínculo emocional estrecho con Elena , Oliverio , Marinella y con Oliver comparte un vínculo distante 
+Oliver Escarraga de 43 años quien tiene vínculo emocional distante con Elena , Oliverio , Yaneth y Marinella. 
+Marinella tuvo dos hijos el primero , Camilo Escarraga de 32 años con Edgar (no se conoce el apellido ni la edad ) , María Alejandra bueno Escarraga de 21 años hija de César bueno. Ambos hijos tienen un vínculo estrecho con Marinella y entre ellos . Alejandra bueno tiene una relación emocional distante con su progenitor . 
+Yaneth Escarraga tuvo una hija , Laura Montañez de 29 años , hija de Miguel Ángel Montañez de 53 años . Laura comparte un vínculo estrecho con Yaneth y distante con Miguel Ángel Montañez .
+Oliver tuvo una hija , Valentina Escarraga de 17 años , con Judith marciales de 42 años . Valentina tiene un vínculo estrecho con Judith y con Oliver . 
+Actualmente , en la misma casa viven : Elena Ceballos ,  Marinella Escarraga , Alejandra Bueno , Laura Montañez , Judith marciales y Valentina Escarraga`;
+
+test("narrative: people, homonyms, nicknames and unknown data", () => {
+  const d = parseFamilyText(NARRATIVE, { currentYear: 2026 });
+  assert.equal(d.persons.length, 13);
+  const olivers = d.persons.filter((p) => p.name === "Oliver Escarraga");
+  assert.equal(olivers.length, 2, "father and son share a name");
+  const father = olivers.find((p) => p.age === 83)!;
+  const son = olivers.find((p) => p.age === 43)!;
+  assert.ok(father.deceased);
+  assert.equal(father.deathYear, 2020);
+  assert.equal(father.birthYear, 1937);
+  assert.ok(!son.deceased);
+  const edgar = d.persons.find((p) => p.name === "Edgar")!;
+  assert.equal(edgar.age, null);
+  assert.match(edgar.notes, /apellido/);
+  assert.equal(d.persons.find((p) => p.name === "María Alejandra Bueno Escarraga")?.age, 21);
+  for (const bad of ["Hace", "Edad", "Primero", "Actualmente"]) assert.ok(!d.persons.some((p) => p.name === bad));
+});
+
+test("narrative: unions, filiation and half-siblings", () => {
+  const d = parseFamilyText(NARRATIVE, { currentYear: 2026 });
+  const id = (n: string, age?: number) => d.persons.find((p) => p.name === n && (age == null || p.age === age))!.id;
+  const rel = (type: string, a: string, b: string) =>
+    d.relationships.some((r) => r.type === type && ((r.a === a && r.b === b) || (r.a === b && r.b === a)));
+  const parent = (a: string, c: string) => d.relationships.some((r) => PARENT_TYPES.includes(r.type) && r.a === a && r.b === c);
+  const father = id("Oliver Escarraga", 83);
+  const son = id("Oliver Escarraga", 43);
+  assert.ok(rel("cohabitation", father, id("Elena Ceballos")));
+  for (const kid of [id("Marinella Escarraga"), id("Yaneth Escarraga"), son]) {
+    assert.ok(parent(father, kid));
+    assert.ok(parent(id("Elena Ceballos"), kid));
+  }
+  assert.ok(parent(id("Marinella Escarraga"), id("Camilo Escarraga")));
+  assert.ok(parent(id("Edgar"), id("Camilo Escarraga")));
+  assert.ok(parent(id("César Bueno"), id("María Alejandra Bueno Escarraga")));
+  assert.ok(!parent(id("Edgar"), id("María Alejandra Bueno Escarraga")));
+  assert.ok(parent(id("Miguel Ángel Montañez"), id("Laura Montañez")));
+  assert.ok(parent(son, id("Valentina Escarraga")));
+  assert.ok(parent(id("Judith Marciales"), id("Valentina Escarraga")));
+});
+
+test("narrative: emotional bonds (both word orders, nicknames, kin and 'entre ellos')", () => {
+  const d = parseFamilyText(NARRATIVE, { currentYear: 2026 });
+  const id = (n: string, age?: number) => d.persons.find((p) => p.name === n && (age == null || p.age === age))!.id;
+  const rel = (type: string, a: string, b: string) =>
+    d.relationships.some((r) => r.type === type && ((r.a === a && r.b === b) || (r.a === b && r.b === a)));
+  const father = id("Oliver Escarraga", 83);
+  const son = id("Oliver Escarraga", 43);
+  const mar = id("Marinella Escarraga");
+  const yan = id("Yaneth Escarraga");
+  const ele = id("Elena Ceballos");
+  assert.ok(rel("distant", father, ele), "ambos tenían vínculo distante");
+  assert.ok(rel("close", mar, ele) && rel("close", mar, yan));
+  assert.ok(rel("close", mar, father), "Oliverio is the elder Oliver");
+  assert.ok(rel("distant", mar, son) && rel("distant", yan, son));
+  assert.ok(!rel("close", mar, son));
+  assert.ok(rel("distant", son, ele) && rel("distant", son, father));
+  const cam = id("Camilo Escarraga");
+  const ale = id("María Alejandra Bueno Escarraga");
+  assert.ok(rel("close", cam, mar) && rel("close", ale, mar) && rel("close", cam, ale));
+  assert.ok(rel("distant", ale, id("César Bueno")), "su progenitor");
+  assert.ok(!rel("distant", ale, id("Marinella Escarraga")));
+  assert.ok(rel("close", id("Laura Montañez"), yan));
+  assert.ok(rel("distant", id("Laura Montañez"), id("Miguel Ángel Montañez")));
+  assert.ok(rel("close", id("Valentina Escarraga"), id("Judith Marciales")));
+  assert.ok(rel("close", id("Valentina Escarraga"), son));
+});
+
+test("narrative: household is only the people listed", () => {
+  const d = parseFamilyText(NARRATIVE, { currentYear: 2026 });
+  const home = d.persons.filter((p) => p.household != null).map((p) => p.name).sort();
+  assert.deepEqual(home, [
+    "Elena Ceballos",
+    "Judith Marciales",
+    "Laura Montañez",
+    "Marinella Escarraga",
+    "María Alejandra Bueno Escarraga",
+    "Valentina Escarraga",
+  ]);
+  assert.equal(new Set(d.persons.map((p) => p.household).filter((h) => h != null)).size, 1);
+});

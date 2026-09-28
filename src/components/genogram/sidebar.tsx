@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { parseFamilyWithAi } from "@/lib/genogram/ai";
-import { EXAMPLE_TEXT, parseFamilyText } from "@/lib/genogram/parser";
+import { EXAMPLE_TEXT, NARRATIVE_EXAMPLE_TEXT, parseFamilyText } from "@/lib/genogram/parser";
 import { useGenogram } from "@/lib/genogram/store";
 import { REL_LABELS, type Gender, type RelType } from "@/lib/genogram/types";
 import { cn } from "@/lib/utils";
@@ -107,13 +107,22 @@ export function Sidebar() {
               <Label htmlFor="family-text" className="mb-0">
                 Descripción familiar
               </Label>
-              <button
-                type="button"
-                className="text-xs font-medium text-primary underline-offset-2 hover:underline"
-                onClick={() => setText(EXAMPLE_TEXT)}
-              >
-                Cargar ejemplo
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                  onClick={() => setText(EXAMPLE_TEXT)}
+                >
+                  Cargar ejemplo
+                </button>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                  onClick={() => setText(NARRATIVE_EXAMPLE_TEXT)}
+                >
+                  Ejemplo narrativo
+                </button>
+              </div>
             </div>
             <Textarea
               id="family-text"
@@ -122,7 +131,7 @@ export function Sidebar() {
               placeholder="María está casada con Juan. Tienen dos hijos: Laura y Pedro."
             />
             <p className="mb-3 mt-2 text-xs text-muted-foreground">
-              Detecta personas (hombre, mujer, género s/d, fallecido, paciente identificado), convivencia («viven juntos»), vínculos familiares (matrimonio, unión libre, separación, divorcio, hijos, adopción, hermanos) y vínculos emocionales (cercana, distante, corte, conflicto). También vale en minúsculas o en primera persona («estoy casada», «tengo dos hijos»).
+              Detecta personas (hombre, mujer, género s/d, fallecido, paciente identificado), convivencia («viven juntos»), vínculos familiares (matrimonio, unión libre, separación, divorcio, hijos, adopción, hermanos) y vínculos emocionales (cercana, distante, corte, conflicto). También vale en minúsculas, en primera persona («estoy casada», «tengo dos hijos») o en forma narrativa (un párrafo por persona: «vínculo estrecho con…», «Tuvieron tres hijos:» + lista, «en la misma casa viven: …», «fallecido hace 6 años, a la edad de 83»).
             </p>
             {preview.persons.length > 0 ? (
               <div className="mb-3 rounded-xl bg-secondary px-3 py-2 text-xs text-muted-foreground">

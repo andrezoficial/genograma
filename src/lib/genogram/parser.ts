@@ -10,223 +10,17 @@ import {
   type Relationship,
 } from "./types.ts";
 import { genderFromWord, inferGenderFromName } from "./gender.ts";
+import { STOP } from "./stopwords.ts";
+import { looksNarrative, parseNarrative, type NarrativeOptions } from "./narrative.ts";
+
+export { NARRATIVE_EXAMPLE_TEXT } from "./narrative.ts";
 
 const TOKEN = String.raw`\p{Lu}\p{L}+(?:-\p{Lu}\p{L}+)?`;
 const PARTICLE = String.raw`(?:de(?:l|\s+l[ao]s?)?\s+)?`;
 const NAME = String.raw`${TOKEN}(?:\s+${PARTICLE}${TOKEN})?`;
 const AGE = String.raw`(?:de\s+)?(\d{1,3})(?:\s*años?)?`;
 
-const STOP = new Set(
-  [
-    "Los",
-    "Las",
-    "El",
-    "La",
-    "De",
-    "Del",
-    "En",
-    "Con",
-    "Un",
-    "Una",
-    "Uno",
-    "Y",
-    "E",
-    "O",
-    "Tienen",
-    "Tiene",
-    "Tuvo",
-    "Tuvieron",
-    "Tengo",
-    "Tuve",
-    "Tenemos",
-    "Tuvimos",
-    "Padres",
-    "Padre",
-    "Madre",
-    "Hijos",
-    "Hijo",
-    "Hija",
-    "Falleció",
-    "Fallecio",
-    "Murió",
-    "Murio",
-    "Años",
-    "Anos",
-    "Llamada",
-    "Llamado",
-    "Llaman",
-    "Llama",
-    "Llamo",
-    "Se",
-    "Me",
-    "Mi",
-    "Mis",
-    "Yo",
-    "Estoy",
-    "Somos",
-    "Está",
-    "Esta",
-    "Están",
-    "Estan",
-    "Estaba",
-    "Estaban",
-    "Casada",
-    "Casado",
-    "Casados",
-    "Casadas",
-    "Casé",
-    "Case",
-    "Divorciada",
-    "Divorciado",
-    "Divorciados",
-    "Separados",
-    "Separada",
-    "Separado",
-    "Hermana",
-    "Hermano",
-    "Hermanos",
-    "Hermanas",
-    "Dos",
-    "Tres",
-    "Cuatro",
-    "Cinco",
-    "Seis",
-    "Siete",
-    "Ocho",
-    "Nueve",
-    "Diez",
-    "Ellos",
-    "Ellas",
-    "También",
-    "Tambien",
-    "Además",
-    "Ademas",
-    "Pero",
-    "Por",
-    "Para",
-    "Su",
-    "Sus",
-    "Nuestro",
-    "Nuestra",
-    "Nuestros",
-    "Nuestras",
-    "Al",
-    "Lo",
-    "Le",
-    "Les",
-    "Que",
-    "Como",
-    "Año",
-    "Ano",
-    "Mes",
-    "Hoy",
-    "Ahora",
-    "Don",
-    "Doña",
-    "Dona",
-    "Paciente",
-    "Identificado",
-    "Identificada",
-    "Familia",
-    "Genograma",
-    "Abuelo",
-    "Abuela",
-    "Abuelos",
-    "Abuelas",
-    "Tío",
-    "Tio",
-    "Tía",
-    "Tia",
-    "Nieto",
-    "Nieta",
-    "Nietos",
-    "Vive",
-    "Viven",
-    "Convive",
-    "Conviven",
-    "Junto",
-    "Junta",
-    "Juntos",
-    "Juntas",
-    "Misma",
-    "Casa",
-    "Nació",
-    "Nacio",
-    "Nacida",
-    "Nacido",
-    "Fue",
-    "Fueron",
-    "Era",
-    "Eran",
-    "Es",
-    "Son",
-    "Adoptada",
-    "Adoptado",
-    "Adoptados",
-    "Mantiene",
-    "Mantienen",
-    "Hay",
-    "Muy",
-    "Cercana",
-    "Cercano",
-    "Cercanas",
-    "Cercanos",
-    "Distante",
-    "Distantes",
-    "Cortó",
-    "Corto",
-    "Rompió",
-    "Rompio",
-    "Relación",
-    "Relacion",
-    "Conflicto",
-    "Índice",
-    "Indice",
-    "Viudo",
-    "Viuda",
-    "Exesposo",
-    "Exesposa",
-    "Esposo",
-    "Esposa",
-    "Marido",
-    "Mujer",
-    "Hombre",
-    "Enero",
-    "Febrero",
-    "Marzo",
-    "Abril",
-    "Mayo",
-    "Junio",
-    "Julio",
-    "Agosto",
-    "Septiembre",
-    "Octubre",
-    "Noviembre",
-    "Diciembre",
-  ].map((w) => w.toLowerCase()),
-);
 
-const EXTRA_STOP = `unión union libre libres hecho concubinato concubina concubino pareja parejas compañero compañera
-novio novia novios novias noviazgo sale salen salió sostiene separó separo separaron separan separación separacion
-divorció divorcio divorciaron divorcian casó casaron adoptaron adoptó adopto adoptan adoptamos adopté adopte
-adoptiva adoptivo adoptivos adoptivas cercanos unidos unida unido unidas estrecha estrecho distanciado distanciada
-distanciados distanciadas distanció distancio distancia lejana lejano lejanos fría frío fria frio cortaron cortada
-cortado cortados cortadas corte relacional hablan habla habló hablo tratan contacto conflictos conflictiva conflictivo
-discute discuten pelea pelean peleó peleado peleada peleados peleadas enfrentado enfrentada enfrentados llevan lleva
-bien mal ex exmarido exmujer expareja exnovio exnovia género genero binario binaria binarie desconocido desconocida
-especificado especificada definido definida indefinido datos persona personas fallecido fallecida fallecidos
-fallecidas fallecieron fallecen murieron muerto muerta muertos difunto difunta difuntos finado finada consultante
-no ni sin sí si ya más mas menos poco entre desde hasta sobre tras cada otra otro otros otras ambos ambas todos todas
-nadie aunque porque cuando donde quien quienes sino mientras tampoco actualmente actual hijastro hijastra gemelos
-gemelas gemelo gemela mellizos mellizas primogénito primogenito menor mayor sobrino sobrina primo prima suegro suegra
-cuñado cuñada yerno nuera padrastro madrastra pero comparten comparte residen reside techo mismo núcleo nucleo hogar
-familiar familiares formado formada forman matrimonio esposos enviudó enviudo viudos quedó quedo relaciones vínculo
-vinculo vínculos vinculos emocionales emocional convivencia estuvo estuvieron quedaron cariñosa cariñoso afectuosa
-afectuoso apegada apegado apegados cercanía cercania ven vio ve hablar contactos sd pi sido ha han hemos he había
-habia roto rota rotos rotas rompió rompieron rompe enfrentan sienten siente unión exesposo exesposa`
-  .split(/\s+/)
-  .filter(Boolean);
-for (const w of EXTRA_STOP) STOP.add(w);
 
 /** Optional age right after a name: "de 45", "45 años", "de 45 años". */
 const AG = String.raw`(?:\s+(?:de\s+)?\d{1,3}(?:\s*años?)?)?`;
@@ -910,7 +704,11 @@ function applyAdoptionAndKids(b: Builder, sentence: string) {
   }
 }
 
-export function parseFamilyText(text: string): GenogramData {
+export function parseFamilyText(text: string, opts: NarrativeOptions = {}): GenogramData {
+  if (looksNarrative(text)) {
+    const narrative = parseNarrative(text, opts);
+    if (narrative.persons.length > 0) return narrative;
+  }
   const b = makeBuilder();
   const cleaned = preprocess(text).trim();
   if (!cleaned) return { persons: [], relationships: [] };
