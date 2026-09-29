@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils";
 import { GenogramCanvas } from "./canvas";
 import { Credits } from "./credits";
 import { Sidebar } from "./sidebar";
+import { UpdateBanner } from "./update-banner";
+import { APP_VERSION } from "@/lib/version";
 
 export function GenogramApp() {
   const hydrate = useGenogram((s) => s.hydrate);
@@ -306,6 +308,7 @@ export function GenogramApp() {
           </AlertDialog>
         </div>
       </header>
+      <UpdateBanner />
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <div className={cn("min-h-0 lg:flex lg:w-[320px] lg:shrink-0", panel === "datos" ? "flex h-full" : "hidden")}>
@@ -379,6 +382,7 @@ export function GenogramApp() {
                 <Icon className="size-5 text-muted-foreground" /> {label}
               </button>
             ))}
+            <p className="px-3 pt-1 pb-2 text-xs text-muted-foreground">Versión {APP_VERSION}</p>
           </div>
         </div>
       ) : null}

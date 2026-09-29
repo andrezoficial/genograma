@@ -53,6 +53,9 @@ function injectHeadStreaming(response: Response, host: string): Response {
   );
   const headers = new Headers(response.headers);
   headers.delete("content-length");
+  // La página (HTML) se revalida siempre: así nadie se queda con una versión vieja guardada.
+  // Los archivos con hash (/assets/...) siguen en caché larga porque su nombre cambia en cada versión.
+  headers.set("cache-control", "no-cache, must-revalidate");
   return new Response(transformed, {
     status: response.status,
     statusText: response.statusText,

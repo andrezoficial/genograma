@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { parseFamilyWithAi } from "@/lib/genogram/ai";
 import { EXAMPLE_TEXT, NARRATIVE_EXAMPLE_TEXT, parseFamilyText } from "@/lib/genogram/parser";
 import { useGenogram } from "@/lib/genogram/store";
+import { APP_VERSION } from "@/lib/version";
 import { REL_LABELS, type Gender, type RelType } from "@/lib/genogram/types";
 import { cn } from "@/lib/utils";
 import { Credits } from "./credits";
@@ -370,6 +371,7 @@ export function Sidebar() {
 
       <div className="border-t border-border px-4 py-2">
         <p className="text-xs text-muted-foreground">{status}</p>
+        <p className="text-[11px] text-muted-foreground/70">Versión {APP_VERSION}</p>
         <Credits />
       </div>
     </aside>

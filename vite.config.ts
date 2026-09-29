@@ -12,6 +12,9 @@ import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
 import { appEnvPlugin } from "./scripts/app-env-plugin.mjs";
 import { isMigrationFile } from "./scripts/migration-plan.mjs";
 
+/** Etiqueta de versión visible en la app: commit de Vercel (si existe) + fecha del build. */
+const APP_VERSION = `${(process.env["VERCEL_GIT_COMMIT_SHA"] ?? "local").slice(0, 7)} · ${new Date().toISOString().slice(0, 10)}`;
+
 /** The files `src/lib/db.ts` globs — same directory, same non-recursive scope. */
 function hasGlobbedMigrations(root: string): boolean {
   try {
@@ -157,6 +160,7 @@ export default defineConfig(({ command, isPreview }) => ({
     strictPort: true,
   },
   resolve: { tsconfigPaths: true },
+  define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
   plugins: [
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
