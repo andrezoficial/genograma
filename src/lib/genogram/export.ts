@@ -141,13 +141,38 @@ export function buildReportSvg(
   return out;
 }
 
-export function downloadBlob(filename: string, blob: Blob) {
+/**
+ * En celulares abre la hoja de "Compartir" (guardar en Fotos/Archivos, WhatsApp, correo…), que es
+ * mucho más práctica que una descarga. Devuelve true si el archivo ya quedó atendido (compartido o
+ * cancelado por la persona); false si hay que descargarlo de la forma clásica.
+ */
+async function tryShare(filename: string, blob: Blob): Promise<boolean> {
+  if (typeof navigator === "undefined" || typeof navigator.share !== "function" || typeof navigator.canShare !== "function") {
+    return false;
+  }
+  if (!window.matchMedia("(pointer: coarse)").matches) return false;
+  const file = new File([blob], filename, { type: blob.type });
+  if (!navigator.canShare({ files: [file] })) return false;
+  try {
+    await navigator.share({ files: [file], title: filename });
+    return true;
+  } catch (err) {
+    return err instanceof DOMException && err.name === "AbortError";
+  }
+}
+
+export async function downloadBlob(filename: string, blob: Blob) {
+  if (await tryShare(filename, blob)) return;
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  // Safari de iPhone necesita que la URL siga viva un momento
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 export function exportSvgElement(svg: SVGSVGElement, filename = "genograma.svg") {

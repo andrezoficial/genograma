@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Sparkles, UserPlus, Wand2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Eraser, Mic, Sparkles, Square, UserPlus, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,12 +12,35 @@ import { cn } from "@/lib/utils";
 import { Credits } from "./credits";
 import { PersonInspector } from "./person-inspector";
 
+// Dictado por voz (Chrome/Android y Safari/iPhone). No está en los tipos de TypeScript.
+type SpeechResult = { isFinal: boolean; 0: { transcript: string } };
+type SpeechEvent = { resultIndex: number; results: ArrayLike<SpeechResult> };
+type Recognizer = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((e: SpeechEvent) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  start(): void;
+  stop(): void;
+};
+
+function speechCtor(): (new () => Recognizer) | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { SpeechRecognition?: new () => Recognizer; webkitSpeechRecognition?: new () => Recognizer };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
 const selectClass =
-  "h-11 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35";
+  "h-11 w-full rounded-md border border-input bg-background px-3 text-base text-foreground sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35";
 
 export function Sidebar() {
   const [text, setText] = useState(EXAMPLE_TEXT);
   const [aiBusy, setAiBusy] = useState(false);
+  const [canDictate, setCanDictate] = useState(false);
+  const [listening, setListening] = useState(false);
+  const recRef = useRef<Recognizer | null>(null);
   const [name, setName] = useState("");
   const [gender, setGender] = useState<Gender>("female");
   const [age, setAge] = useState("");
@@ -38,6 +61,42 @@ export function Sidebar() {
   const addRelationship = useGenogram((s) => s.addRelationship);
   const selected = persons.find((p) => p.id === selectedId) ?? null;
   const preview = useMemo(() => (text.trim() ? parseFamilyText(text) : { persons: [], relationships: [] }), [text]);
+
+  useEffect(() => {
+    setCanDictate(speechCtor() != null);
+    return () => recRef.current?.stop();
+  }, []);
+
+  function toggleDictation() {
+    if (listening) {
+      recRef.current?.stop();
+      return;
+    }
+    const Ctor = speechCtor();
+    if (!Ctor) return;
+    const rec = new Ctor();
+    rec.lang = "es-CO";
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.onresult = (e) => {
+      let add = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r?.isFinal) add += r[0].transcript;
+      }
+      add = add.trim();
+      if (add) setText((t) => (t && !/\s$/.test(t) ? `${t} ` : t) + add);
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    recRef.current = rec;
+    try {
+      rec.start();
+      setListening(true);
+    } catch {
+      setListening(false);
+    }
+  }
 
   function submitPerson() {
     const id = addPerson({
@@ -130,9 +189,28 @@ export function Sidebar() {
               onChange={(e) => setText(e.target.value)}
               placeholder="María está casada con Juan. Tienen dos hijos: Laura y Pedro."
             />
-            <p className="mb-3 mt-2 text-xs text-muted-foreground">
+            <details className="mb-3 mt-2 text-xs text-muted-foreground">
+              <summary className="cursor-pointer py-1 font-medium text-primary">¿Qué puedo escribir?</summary>
+              <p className="mt-1">
               Detecta personas (hombre, mujer, género s/d, fallecido, paciente identificado), convivencia («viven juntos»), vínculos familiares (matrimonio, unión libre, separación, divorcio, hijos, adopción, hermanos) y vínculos emocionales (cercana, distante, corte, conflicto). También vale en minúsculas, en primera persona («estoy casada», «tengo dos hijos») o en forma narrativa (un párrafo por persona: «vínculo estrecho con…», «Tuvieron tres hijos:» + lista, «en la misma casa viven: …», «fallecido hace 6 años, a la edad de 83»).
-            </p>
+              </p>
+            </details>
+            <div className={cn("mb-3 grid gap-2", canDictate ? "grid-cols-2" : "grid-cols-1")}>
+              {canDictate ? (
+                <Button
+                  type="button"
+                  variant={listening ? "default" : "outline"}
+                  className="h-11"
+                  onClick={toggleDictation}
+                  aria-pressed={listening}
+                >
+                  {listening ? <Square /> : <Mic />} {listening ? "Detener" : "Dictar"}
+                </Button>
+              ) : null}
+              <Button type="button" variant="outline" className="h-11" disabled={!text} onClick={() => setText("")}>
+                <Eraser /> Borrar texto
+              </Button>
+            </div>
             {preview.persons.length > 0 ? (
               <div className="mb-3 rounded-xl bg-secondary px-3 py-2 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">
@@ -151,12 +229,14 @@ export function Sidebar() {
             ) : text.trim() ? (
               <p className="mb-3 text-xs text-destructive">No se detectan nombres todavía.</p>
             ) : null}
-            <Button type="button" className="h-11 w-full" onClick={() => loadFromText(text)}>
-              <Wand2 /> Generar genograma
-            </Button>
-            <Button type="button" variant="outline" className="mt-2 h-11 w-full" disabled={aiBusy} onClick={generateAi}>
-              <Sparkles /> {aiBusy ? "Interpretando…" : "Generar con IA"}
-            </Button>
+            <div className="sticky -bottom-4 -mx-4 border-t border-border bg-card px-4 pb-4 pt-3">
+              <Button type="button" className="h-12 w-full text-base" onClick={() => loadFromText(text)}>
+                <Wand2 /> Generar genograma
+              </Button>
+              <Button type="button" variant="outline" className="mt-2 h-12 w-full text-base" disabled={aiBusy} onClick={generateAi}>
+                <Sparkles /> {aiBusy ? "Interpretando…" : "Generar con IA"}
+              </Button>
+            </div>
           </div>
         ) : null}
 

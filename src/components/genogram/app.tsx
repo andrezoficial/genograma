@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ClipboardList, Download, FileJson, RotateCcw, RotateCw, Trash2, UnfoldHorizontal, Upload } from "lucide-react";
+import { ClipboardList, Download, FileJson, FileText, MoreVertical, Network, RotateCcw, RotateCw, Trash2, UnfoldHorizontal, Upload } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,6 +44,10 @@ export function GenogramApp() {
   const fileRef = useRef<HTMLInputElement>(null);
   const selected = persons.find((p) => p.id === selectedId) ?? null;
   const [reportOpen, setReportOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [clearOpen, setClearOpen] = useState(false);
+  const status = useGenogram((s) => s.status);
+  const [toast, setToast] = useState<string | null>(null);
   const [reportMeta, setReportMeta] = useState<ReportMeta>({
     title: "",
     professional: "",
@@ -54,6 +58,14 @@ export function GenogramApp() {
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  // En el celular la barra de estado del panel "Datos" queda oculta: mostramos los avisos sobre el lienzo.
+  useEffect(() => {
+    if (!status || status === "Listo.") return;
+    setToast(status);
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [status]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -101,14 +113,14 @@ export function GenogramApp() {
     const clone = preparedSvg();
     if (!clone) return;
     await exportPngElement(clone);
-    useGenogram.setState({ status: "PNG descargado." });
+    useGenogram.setState({ status: "PNG listo." });
   }
 
   function onExportSvg() {
     const clone = preparedSvg();
     if (!clone) return;
     exportSvgElement(clone);
-    useGenogram.setState({ status: "SVG descargado." });
+    useGenogram.setState({ status: "SVG listo." });
   }
 
   async function onExportReport() {
@@ -121,7 +133,7 @@ export function GenogramApp() {
     await exportPngElement(reportSvg, `${filenameBase || "genograma-informe"}.png`);
     reportSvg.remove();
     setReportOpen(false);
-    useGenogram.setState({ status: "Informe descargado." });
+    useGenogram.setState({ status: "Informe listo." });
   }
 
   function onExportJson() {
@@ -129,7 +141,7 @@ export function GenogramApp() {
       "genograma.json",
       new Blob([JSON.stringify({ persons, relationships }, null, 2)], { type: "application/json" }),
     );
-    useGenogram.setState({ status: "JSON descargado." });
+    useGenogram.setState({ status: "JSON listo." });
   }
 
   function onImportJson(file: File) {
@@ -151,7 +163,7 @@ export function GenogramApp() {
 
   return (
     <div className="flex h-dvh min-h-0 flex-col bg-background">
-      <header className="flex h-12 shrink-0 items-center justify-between gap-3 bg-bar px-3 text-bar-foreground sm:px-5">
+      <header className="flex h-[calc(3rem+env(safe-area-inset-top))] shrink-0 items-center justify-between gap-3 bg-bar px-3 pt-[env(safe-area-inset-top)] text-bar-foreground sm:px-5">
         <div className="flex min-w-0 items-baseline gap-3">
           <h1 className="font-display text-lg leading-none font-medium italic tracking-tight">Genograma</h1>
           <p className="hidden text-xs tracking-wide text-bar-foreground/55 sm:block">ficha familiar</p>
@@ -221,28 +233,18 @@ export function GenogramApp() {
           </Button>
           <Button
             type="button"
-            variant="ghost"
-            size="icon"
-            disabled={persons.length === 0}
-            className="size-10 text-bar-foreground hover:bg-white/10 hover:text-bar-foreground md:hidden"
-            onClick={() => setReportOpen(true)}
-            aria-label="Generar informe"
-          >
-            <ClipboardList />
-          </Button>
-          <Button
-            type="button"
             size="sm"
-            className="bg-bar-foreground text-bar hover:opacity-90"
+            className="bg-bar-foreground text-bar hover:opacity-90 max-sm:size-10 max-sm:px-0"
             onClick={onExportPng}
+            aria-label="Descargar PNG"
           >
-            <Download /> PNG
+            <Download /> <span className="hidden sm:inline">PNG</span>
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="size-10 hidden text-bar-foreground hover:bg-white/10 hover:text-bar-foreground sm:inline-flex"
+            className="hidden size-10 text-bar-foreground hover:bg-white/10 hover:text-bar-foreground md:inline-flex"
             onClick={onExportJson}
             aria-label="Exportar JSON"
           >
@@ -252,7 +254,7 @@ export function GenogramApp() {
             type="button"
             variant="ghost"
             size="icon"
-            className="size-10 hidden text-bar-foreground hover:bg-white/10 hover:text-bar-foreground sm:inline-flex"
+            className="hidden size-10 text-bar-foreground hover:bg-white/10 hover:text-bar-foreground md:inline-flex"
             onClick={() => fileRef.current?.click()}
             aria-label="Importar JSON"
           >
@@ -269,14 +271,23 @@ export function GenogramApp() {
               e.target.value = "";
             }}
           />
-          <Credits variant="icon" />
-          <AlertDialog>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-10 text-bar-foreground hover:bg-white/10 hover:text-bar-foreground md:hidden"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Más opciones"
+          >
+            <MoreVertical />
+          </Button>
+          <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
             <AlertDialogTrigger asChild>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="size-10 text-bar-foreground hover:bg-white/10 hover:text-bar-foreground"
+                className="hidden size-10 text-bar-foreground hover:bg-white/10 hover:text-bar-foreground md:inline-flex"
                 aria-label="Limpiar"
               >
                 <Trash2 />
@@ -302,6 +313,17 @@ export function GenogramApp() {
         </div>
         <div className={cn("relative min-h-0 min-w-0 flex-1 flex-col", panel === "lienzo" ? "flex" : "hidden lg:flex")}>
           {hydrated ? <GenogramCanvas svgRef={svgRef} /> : <div className="flex-1 bg-paper" />}
+          {toast && panel === "lienzo" ? (
+            <div
+              className={cn(
+                "pointer-events-none absolute right-3 left-3 z-20 rounded-lg bg-bar px-3 py-2 text-center text-xs font-medium text-bar-foreground shadow-[var(--shadow-border)] lg:hidden",
+                selected ? "bottom-24" : "bottom-3",
+              )}
+              role="status"
+            >
+              {toast}
+            </div>
+          ) : null}
           {selected && panel === "lienzo" ? (
             <div className="absolute right-3 bottom-3 left-3 z-20 rounded-xl bg-card p-3 shadow-[var(--shadow-border)] lg:hidden">
               <div className="flex items-center justify-between gap-3">
@@ -328,6 +350,38 @@ export function GenogramApp() {
           ) : null}
         </div>
       </div>
+
+      {menuOpen ? (
+        <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={() => setMenuOpen(false)}>
+          <div
+            className="absolute inset-x-0 bottom-0 rounded-t-2xl bg-card p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-border)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(
+              [
+                [Download, "Descargar SVG", () => onExportSvg(), false],
+                [ClipboardList, "Informe clínico", () => setReportOpen(true), persons.length === 0],
+                [FileJson, "Exportar JSON", () => onExportJson(), false],
+                [Upload, "Importar JSON", () => fileRef.current?.click(), false],
+                [Trash2, "Vaciar genograma", () => setClearOpen(true), false],
+              ] as const
+            ).map(([Icon, label, action, disabled]) => (
+              <button
+                key={label}
+                type="button"
+                disabled={disabled}
+                className="flex h-12 w-full items-center gap-3 rounded-lg px-3 text-left text-base disabled:opacity-40"
+                onClick={() => {
+                  setMenuOpen(false);
+                  action();
+                }}
+              >
+                <Icon className="size-5 text-muted-foreground" /> {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {reportOpen ? (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setReportOpen(false)}>
@@ -392,21 +446,27 @@ export function GenogramApp() {
         </div>
       ) : null}
 
-      <nav className="grid h-12 shrink-0 grid-cols-2 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:hidden">
-        <button
-          type="button"
-          className={cn("text-sm font-medium", panel === "datos" ? "text-foreground" : "text-muted-foreground")}
-          onClick={() => setPanel("datos")}
-        >
-          Datos
-        </button>
-        <button
-          type="button"
-          className={cn("text-sm font-medium", panel === "lienzo" ? "text-foreground" : "text-muted-foreground")}
-          onClick={() => setPanel("lienzo")}
-        >
-          Lienzo
-        </button>
+      <nav className="grid shrink-0 grid-cols-2 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:hidden">
+        {(
+          [
+            ["datos", "Datos", FileText],
+            ["lienzo", "Lienzo", Network],
+          ] as const
+        ).map(([id, label, Icon]) => (
+          <button
+            key={id}
+            type="button"
+            className={cn(
+              "flex h-14 flex-col items-center justify-center gap-0.5 text-xs font-medium",
+              panel === id ? "text-foreground" : "text-muted-foreground",
+            )}
+            onClick={() => setPanel(id)}
+            aria-current={panel === id}
+          >
+            <Icon className="size-5" />
+            {label}
+          </button>
+        ))}
       </nav>
     </div>
   );

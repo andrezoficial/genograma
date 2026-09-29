@@ -1,14 +1,26 @@
 import { useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_HOUSEHOLD_LABEL, REL_LABELS, UNION_TYPES, type Gender, type Person } from "@/lib/genogram/types";
 import { useGenogram } from "@/lib/genogram/store";
 
 const selectClass =
-  "h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35";
+  "h-11 w-full rounded-md border border-input bg-background px-3 text-base text-foreground sm:h-10 sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35";
 
 export function PersonInspector({ person }: { person: Person }) {
   const updatePerson = useGenogram((s) => s.updatePerson);
@@ -140,19 +152,19 @@ export function PersonInspector({ person }: { person: Person }) {
           />
         </div>
       </div>
-      <label className="flex min-h-10 items-center gap-2 text-sm">
+      <label className="flex min-h-11 items-center gap-3 text-base sm:text-sm">
         <input
           type="checkbox"
-          className="size-4 accent-primary"
+          className="size-5 accent-primary"
           checked={person.deceased}
           onChange={(e) => updatePerson(person.id, { deceased: e.target.checked })}
         />
         Fallecido/a
       </label>
-      <label className="flex min-h-10 items-center gap-2 text-sm">
+      <label className="flex min-h-11 items-center gap-3 text-base sm:text-sm">
         <input
           type="checkbox"
-          className="size-4 accent-primary"
+          className="size-5 accent-primary"
           checked={person.identifiedPatient}
           onChange={(e) => updatePerson(person.id, { identifiedPatient: e.target.checked })}
         />
@@ -180,7 +192,7 @@ export function PersonInspector({ person }: { person: Person }) {
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              className="h-11 sm:h-9"
               onClick={() => updatePerson(person.id, { household: null })}
             >
               Quitar de este núcleo
@@ -188,14 +200,14 @@ export function PersonInspector({ person }: { person: Person }) {
           </div>
         ) : (
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <Button type="button" variant="outline" size="sm" onClick={assignToNewHousehold}>
+            <Button type="button" variant="outline" className="h-11 sm:h-9" onClick={assignToNewHousehold}>
               + Nuevo núcleo aquí
             </Button>
             {householdGroups.map((g) => (
               <button
                 key={g.id}
                 type="button"
-                className="rounded-full border border-input px-2.5 py-1 text-xs text-muted-foreground hover:border-ink"
+                className="min-h-9 rounded-full border border-input px-3 py-1 text-sm text-muted-foreground hover:border-ink sm:min-h-0 sm:text-xs"
                 onClick={() => updatePerson(person.id, { household: g.id })}
               >
                 Sumar a «{g.label}»
@@ -218,8 +230,10 @@ export function PersonInspector({ person }: { person: Person }) {
       </div>
       <div>
         <Label htmlFor="edit-notes">Notas clínicas</Label>
-        <Input
+        <Textarea
           id="edit-notes"
+          rows={3}
+          className="min-h-24"
           value={notes}
           onFocus={() => checkpoint()}
           onChange={(e) => {
@@ -240,7 +254,7 @@ export function PersonInspector({ person }: { person: Person }) {
                       {nameOf(r.a === person.id ? r.b : r.a)}
                     </span>
                     <select
-                      className="mt-0.5 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      className="mt-0.5 h-10 w-full rounded-md border border-input bg-background px-2 text-base sm:h-9 sm:text-sm"
                       value={r.type}
                       onChange={(e) => updateRelationshipType(r.id, e.target.value as (typeof r)["type"])}
                       aria-label="Tipo de vínculo de pareja"
@@ -259,11 +273,11 @@ export function PersonInspector({ person }: { person: Person }) {
                 )}
                 <button
                   type="button"
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  className="-my-1 -mr-1 flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-destructive"
                   onClick={() => removeRelationship(r.id)}
                   aria-label="Quitar vínculo"
                 >
-                  <Trash2 className="size-3.5" />
+                  <Trash2 className="size-4" />
                 </button>
               </li>
             ))}
@@ -271,9 +285,23 @@ export function PersonInspector({ person }: { person: Person }) {
         </div>
       ) : null}
       <Separator />
-      <Button type="button" variant="destructive" className="w-full" onClick={() => removePerson(person.id)}>
-        <Trash2 /> Eliminar persona
-      </Button>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button type="button" variant="destructive" className="h-11 w-full">
+            <Trash2 /> Eliminar persona
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar a {person.name}?</AlertDialogTitle>
+            <AlertDialogDescription>Se quitan también sus vínculos. Puedes deshacerlo después.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => removePerson(person.id)}>Eliminar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

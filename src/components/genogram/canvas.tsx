@@ -592,19 +592,22 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
     const h = el.clientHeight;
     if (w < 40 || h < 40) return;
     const box = boundingBox(persons, 28, 80, 80, households);
-    const toolW = 56;
+    const top = 52; // franja de botones (Añadir / zoom) arriba del lienzo
     const pad = 16;
-    const availW = Math.max(80, w - pad * 2 - toolW);
-    const availH = Math.max(80, h - pad * 2);
+    const availW = Math.max(80, w - pad * 2);
+    const availH = Math.max(80, h - pad * 2 - top);
     const k = Math.min(availW / box.width, availH / box.height, 1.45);
     const cx = box.minX + box.width / 2;
     const cy = box.minY + box.height / 2;
     setView({
       k,
       x: pad + availW / 2 - cx * k,
-      y: pad + availH / 2 - cy * k,
+      y: top + pad + availH / 2 - cy * k,
     });
   };
+
+  const fitRef = useRef(fit);
+  fitRef.current = fit;
 
   useEffect(() => {
     fit();
@@ -615,11 +618,19 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
     const el = wrapRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     let ready = false;
+    let lastW = 0;
     const ro = new ResizeObserver(() => {
+      const w = el.clientWidth;
       if (!ready) {
         ready = true;
-        fit();
+        lastW = w;
+        fitRef.current();
+        return;
       }
+      // Girar el celular (o cambiar el tamaño de la ventana) reajusta el mapa. Mostrar el lienzo
+      // tras estar oculto (lastW < 40) no lo toca, para no perder el zoom y el desplazamiento.
+      if (w >= 40 && lastW >= 40 && Math.abs(w - lastW) > 40) fitRef.current();
+      if (w >= 40) lastW = w;
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -866,6 +877,9 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
           <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
             Genera una familia desde texto, o pulsa Añadir y toca el lienzo.
           </p>
+          <Button type="button" className="mt-4 h-11 lg:hidden" onClick={() => useGenogram.getState().setPanel("datos")}>
+            Escribir la familia
+          </Button>
         </div>
       ) : null}
       <svg
@@ -916,7 +930,7 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
           }}
         >
           <UserPlus />
-          <span className="hidden sm:inline">Añadir</span>
+          <span>Añadir</span>
         </Button>
         <Button
           type="button"
@@ -932,7 +946,7 @@ export function GenogramCanvas({ svgRef }: { svgRef: RefObject<SVGSVGElement | n
           }}
         >
           <Link2 />
-          <span className="hidden sm:inline">Vincular</span>
+          <span>Vincular</span>
         </Button>
       </div>
 

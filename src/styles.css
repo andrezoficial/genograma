@@ -67,6 +67,22 @@
     color: var(--color-foreground);
   }
 
+  /* Sin espera de 300 ms ni zoom por doble toque en controles; sin recuadro gris al tocar */
+  button,
+  a,
+  select,
+  label,
+  summary,
+  [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Evita que el arrastre en el lienzo recargue la página (pull-to-refresh) */
+  body {
+    overscroll-behavior-y: none;
+  }
+
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
