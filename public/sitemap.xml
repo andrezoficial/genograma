@@ -2,5 +2,8 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://genograma-rosy.vercel.app/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
   <url><loc>https://genograma-rosy.vercel.app/guia-genograma</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://genograma-rosy.vercel.app/simbologia-genograma</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://genograma-rosy.vercel.app/genograma-ejemplo</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://genograma-rosy.vercel.app/genograma-trabajo-social</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://genograma-rosy.vercel.app/privacidad.html</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>
 </urlset>

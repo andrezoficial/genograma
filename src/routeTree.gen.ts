@@ -10,11 +10,29 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as GuiaGenogramaRouteImport } from './routes/guia-genograma'
+import { Route as SimbologiaGenogramaRouteImport } from './routes/simbologia-genograma'
+import { Route as GenogramaEjemploRouteImport } from './routes/genograma-ejemplo'
+import { Route as GenogramaTrabajoSocialRouteImport } from './routes/genograma-trabajo-social'
 import { Route as IndexRouteImport } from './routes/index'
 
 const GuiaGenogramaRoute = GuiaGenogramaRouteImport.update({
   id: '/guia-genograma',
   path: '/guia-genograma',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SimbologiaGenogramaRoute = SimbologiaGenogramaRouteImport.update({
+  id: '/simbologia-genograma',
+  path: '/simbologia-genograma',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GenogramaEjemploRoute = GenogramaEjemploRouteImport.update({
+  id: '/genograma-ejemplo',
+  path: '/genograma-ejemplo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GenogramaTrabajoSocialRoute = GenogramaTrabajoSocialRouteImport.update({
+  id: '/genograma-trabajo-social',
+  path: '/genograma-trabajo-social',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -26,31 +44,64 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/guia-genograma': typeof GuiaGenogramaRoute
+  '/simbologia-genograma': typeof SimbologiaGenogramaRoute
+  '/genograma-ejemplo': typeof GenogramaEjemploRoute
+  '/genograma-trabajo-social': typeof GenogramaTrabajoSocialRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/guia-genograma': typeof GuiaGenogramaRoute
+  '/simbologia-genograma': typeof SimbologiaGenogramaRoute
+  '/genograma-ejemplo': typeof GenogramaEjemploRoute
+  '/genograma-trabajo-social': typeof GenogramaTrabajoSocialRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/guia-genograma': typeof GuiaGenogramaRoute
+  '/simbologia-genograma': typeof SimbologiaGenogramaRoute
+  '/genograma-ejemplo': typeof GenogramaEjemploRoute
+  '/genograma-trabajo-social': typeof GenogramaTrabajoSocialRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/guia-genograma'
+  fullPaths: '/' | '/guia-genograma' | '/simbologia-genograma' | '/genograma-ejemplo' | '/genograma-trabajo-social'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/guia-genograma'
-  id: '__root__' | '/' | '/guia-genograma'
+  to: '/' | '/guia-genograma' | '/simbologia-genograma' | '/genograma-ejemplo' | '/genograma-trabajo-social'
+  id: '__root__' | '/' | '/guia-genograma' | '/simbologia-genograma' | '/genograma-ejemplo' | '/genograma-trabajo-social'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   GuiaGenogramaRoute: typeof GuiaGenogramaRoute
+  SimbologiaGenogramaRoute: typeof SimbologiaGenogramaRoute
+  GenogramaEjemploRoute: typeof GenogramaEjemploRoute
+  GenogramaTrabajoSocialRoute: typeof GenogramaTrabajoSocialRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/genograma-trabajo-social': {
+      id: '/genograma-trabajo-social'
+      path: '/genograma-trabajo-social'
+      fullPath: '/genograma-trabajo-social'
+      preLoaderRoute: typeof GenogramaTrabajoSocialRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/genograma-ejemplo': {
+      id: '/genograma-ejemplo'
+      path: '/genograma-ejemplo'
+      fullPath: '/genograma-ejemplo'
+      preLoaderRoute: typeof GenogramaEjemploRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/simbologia-genograma': {
+      id: '/simbologia-genograma'
+      path: '/simbologia-genograma'
+      fullPath: '/simbologia-genograma'
+      preLoaderRoute: typeof SimbologiaGenogramaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/guia-genograma': {
       id: '/guia-genograma'
       path: '/guia-genograma'
@@ -71,6 +122,9 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   GuiaGenogramaRoute: GuiaGenogramaRoute,
+  SimbologiaGenogramaRoute: SimbologiaGenogramaRoute,
+  GenogramaEjemploRoute: GenogramaEjemploRoute,
+  GenogramaTrabajoSocialRoute: GenogramaTrabajoSocialRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

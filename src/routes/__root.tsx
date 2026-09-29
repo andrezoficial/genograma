@@ -1,6 +1,7 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
+import { RegisterSW } from "@/components/register-sw";
 import appCss from "../styles.css?url";
 import { SEO_DESCRIPTION, SEO_TITLE, SITE_NAME, SITE_URL } from "@/lib/seo";
 
@@ -62,6 +63,7 @@ export const Route = createRootRoute({
       </head>
       <body className="bg-background text-foreground font-sans">
         <PreviewHostBridge />
+        <RegisterSW />
         <AuthProvider>
           <Outlet />
         </AuthProvider>

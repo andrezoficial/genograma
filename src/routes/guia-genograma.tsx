@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { RELATED } from "@/components/seo-page";
 import { SITE_NAME, SITE_URL } from "@/lib/seo";
 
 const TITLE = "Cómo hacer un genograma familiar paso a paso (con símbolos) | Genograma Free";
@@ -96,6 +97,19 @@ function Guide() {
           </section>
         ))}
       </div>
+
+      <aside className="mt-10 text-sm">
+        <p className="font-semibold">Más sobre genogramas</p>
+        <ul className="mt-2 space-y-1">
+          {RELATED.filter((r) => r.to !== "/guia-genograma").map((r) => (
+            <li key={r.to}>
+              <a href={r.to} className="underline underline-offset-4">
+                {r.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </aside>
 
       <p className="mt-12">
         <Link to="/" className="rounded-md bg-primary px-4 py-3 text-primary-foreground">

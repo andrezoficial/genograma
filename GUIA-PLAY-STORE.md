@@ -14,7 +14,7 @@ completa. Los cambios que publiques en Vercel se ven en la app sin volver a subi
 ## Pasos
 1. **Despliega** esta versión en Vercel y comprueba que abren:
    `/manifest.webmanifest`, `/icons/icon-512.png` y `/privacidad.html`.
-2. En `public/privacidad.html` cambia `TU-CORREO@ejemplo.com` por tu correo real.
+2. (Ya hecho) El correo de contacto en `public/privacidad.html` es andrezoficialdev@gmail.com.
 3. En `android/twa-manifest.json` reemplaza `genograma-rosy.vercel.app` por tu dominio (5 veces).
 4. Instala y ejecuta Bubblewrap:
    ```bash
@@ -45,7 +45,7 @@ completa. Los cambios que publiques en Vercel se ven en la app sin volver a subi
 
 ## Notas
 - `genograma.v3` sigue siendo la clave de almacenamiento, para no perder los datos de quien ya usa la app.
-- Sin conexión, la app no carga (no hay service worker). Si lo quieres, es el siguiente paso.
+- Modo sin conexión: `public/sw.js` guarda la app la primera vez que se abre con internet. Después abre sin conexión y tus datos siguen ahí. "Generar con IA" sí necesita internet; "Generar genograma" (análisis local) no. Si publicas una versión nueva, la app la recoge la siguiente vez que haya conexión.
 - Si prefieres no usar la terminal: https://www.pwabuilder.com genera el mismo paquete Android pegando tu URL.
 
 ---
