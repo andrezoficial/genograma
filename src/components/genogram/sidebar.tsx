@@ -372,6 +372,9 @@ export function Sidebar() {
       <div className="border-t border-border px-4 py-2">
         <p className="text-xs text-muted-foreground">{status}</p>
         <p className="text-[11px] text-muted-foreground/70">Versión {APP_VERSION}</p>
+        <a href="/guia-genograma" className="block px-1 py-2 text-xs tracking-wide text-muted-foreground underline underline-offset-4 hover:text-foreground">
+          ¿Qué es un genograma? Guía y símbolos
+        </a>
         <Credits />
       </div>
     </aside>

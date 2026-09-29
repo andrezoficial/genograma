@@ -135,7 +135,7 @@ export function buildReportSvg(
     svgEl("line", { x1: box.minX, y1: footerY - 20, x2: box.minX + box.width, y2: footerY - 20, stroke: ink, "stroke-width": 1, opacity: 0.2 }),
   );
   const footer = svgEl("text", { x: left, y: footerY, "font-family": font, "font-size": 10, fill: muted });
-  footer.textContent = "Documento clínico · uso confidencial · genograma.app";
+  footer.textContent = "Documento clínico · uso confidencial · Genograma Free";
   out.appendChild(footer);
 
   return out;

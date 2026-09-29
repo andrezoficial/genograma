@@ -167,7 +167,7 @@ export function GenogramApp() {
     <div className="flex h-dvh min-h-0 flex-col bg-background">
       <header className="flex h-[calc(3rem+env(safe-area-inset-top))] shrink-0 items-center justify-between gap-3 bg-bar px-3 pt-[env(safe-area-inset-top)] text-bar-foreground sm:px-5">
         <div className="flex min-w-0 items-baseline gap-3">
-          <h1 className="font-display text-lg leading-none font-medium italic tracking-tight">Genograma</h1>
+          <h1 className="font-display text-lg leading-none font-medium italic tracking-tight">Genograma Free</h1>
           <p className="hidden text-xs tracking-wide text-bar-foreground/55 sm:block">ficha familiar</p>
           <span className="hidden h-3 w-px bg-bar-foreground/20 md:block" aria-hidden />
           <Credits variant="bar" />
