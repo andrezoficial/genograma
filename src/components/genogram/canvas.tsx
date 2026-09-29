@@ -17,7 +17,7 @@ import {
 } from "@/lib/genogram/types";
 import { boundingBox } from "@/lib/genogram/layout";
 import { useGenogram } from "@/lib/genogram/store";
-import { LEGEND_GROUPS } from "@/lib/genogram/legend";
+import { COND_MENTAL, COND_PHYSICAL, LEGEND_GROUPS } from "@/lib/genogram/legend";
 import { cn } from "@/lib/utils";
 import { LegendGlyph } from "./legend-glyphs";
 
@@ -385,6 +385,52 @@ function HouseholdLayer({
   return <g>{nodes}</g>;
 }
 
+/** McGoldrick-style inner marks: substances fill the bottom, mental health the left half, physical health the right half. */
+function ConditionMarks({ person, stroke, sw }: { person: Person; stroke: string; sw: number }) {
+  const conds = person.conditions ?? [];
+  if (conds.length === 0) return null;
+  const clipId = `cond-clip-${person.id}`;
+  const shape = (props: Record<string, unknown>) =>
+    person.gender === "female" ? (
+      <circle r={HALF} {...props} />
+    ) : person.gender === "unknown" ? (
+      <polygon points={`0,${-HALF - 2} ${HALF + 1},${HALF - 1} ${-HALF - 1},${HALF - 1}`} {...props} />
+    ) : (
+      <rect x={-HALF} y={-HALF} width={HALF * 2} height={HALF * 2} {...props} />
+    );
+  const bottom = (["alcohol", "drugs"] as const).filter((c) => conds.includes(c));
+  return (
+    <g pointerEvents="none">
+      <clipPath id={clipId}>{shape({})}</clipPath>
+      <g clipPath={`url(#${clipId})`}>
+        {conds.includes("mental") ? (
+          <rect x={-HALF - 2} y={-HALF - 4} width={HALF + 2} height={HALF * 2 + 8} fill={COND_MENTAL} />
+        ) : null}
+        {conds.includes("physical") ? (
+          <rect x={0} y={-HALF - 4} width={HALF + 2} height={HALF * 2 + 8} fill={COND_PHYSICAL} />
+        ) : null}
+        {bottom.map((c, i) => {
+          const y1 = HALF + 2 - 8 * i;
+          const y0 = y1 - 8;
+          if (c === "alcohol") {
+            return <rect key={c} x={-HALF - 2} y={y0} width={HALF * 2 + 4} height={8} fill={INK} />;
+          }
+          return (
+            <g key={c} stroke={INK} strokeWidth={1.6}>
+              <rect x={-HALF - 2} y={y0} width={HALF * 2 + 4} height={8} fill="#f6f1e8" stroke="none" />
+              {[-24, -16, -8, 0, 8, 16, 24].map((dx) => (
+                <line key={dx} x1={dx - 6} y1={y1} x2={dx + 2} y2={y0} />
+              ))}
+              <line x1={-HALF - 2} y1={y0} x2={HALF + 2} y2={y0} strokeWidth={1.2} />
+            </g>
+          );
+        })}
+      </g>
+      {shape({ fill: "none", stroke, strokeWidth: sw })}
+    </g>
+  );
+}
+
 function PersonMark({
   person,
   selected,
@@ -449,6 +495,7 @@ function PersonMark({
       ) : (
         <rect x={-HALF} y={-HALF} width={HALF * 2} height={HALF * 2} fill={fill} stroke={stroke} strokeWidth={sw} />
       )}
+      <ConditionMarks person={person} stroke={stroke} sw={sw} />
       {person.deceased ? (
         <>
           <line x1={-12} y1={-12} x2={12} y2={12} stroke={INK} strokeWidth={2.2} />

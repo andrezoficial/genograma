@@ -62,7 +62,7 @@ function tuning(cfg: Provider) {
 function systemPrompt(year: number) {
   return [
     "Eres un experto en genogramas clínicos. Extrae personas y vínculos de una descripción familiar en español.",
-    'Responde SOLO JSON válido: {"persons":[{"id":"p1","name":"","gender":"male|female|unknown","age":null,"birthYear":null,"deathYear":null,"deceased":false,"occupation":"","notes":"","identifiedPatient":false,"household":null}],"relationships":[{"type":"","from":"p1","to":"p2"}]}.',
+    'Responde SOLO JSON válido: {"persons":[{"id":"p1","name":"","gender":"male|female|unknown","age":null,"birthYear":null,"deathYear":null,"deceased":false,"occupation":"","notes":"","identifiedPatient":false,"conditions":[],"household":null}],"relationships":[{"type":"","from":"p1","to":"p2"}]}.',
     "Tipos de relación: marriage, cohabitation (unión libre / unión de hecho), separation, divorce, widowed, dating, parent_child, adopted, sibling, close, distant, cutoff, conflict.",
     "REGLAS:",
     `- El año actual es ${year}. «Fallecido hace 6 años» → deceased true y deathYear ${year - 6}; si dice la edad al morir, ponla en age y birthYear = deathYear − age.`,
@@ -75,6 +75,7 @@ function systemPrompt(year: number) {
     "- Si el texto dice quiénes viven juntos, pon el mismo número entero en household (empezando en 1) SOLO a esas personas.",
     "- Si no se conoce un dato (apellido, edad), déjalo en null y explícalo en notes (por ejemplo «Se desconoce apellido y edad»).",
     "- identifiedPatient true solo para quien el texto marca como paciente identificado o consultante.",
+    "- conditions: lista con alcohol, drugs, mental o physical solo si el texto lo dice de esa persona (alcoholismo, otras sustancias, enfermedad mental, enfermedad física).",
     "- No inventes personas, edades ni vínculos que no estén en el texto. Ignora encabezados de chat (fecha, hora, nombre del remitente) y texto repetido.",
   ].join("\n");
 }

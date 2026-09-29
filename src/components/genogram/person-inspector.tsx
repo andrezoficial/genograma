@@ -16,7 +16,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { DEFAULT_HOUSEHOLD_LABEL, REL_LABELS, UNION_TYPES, type Gender, type Person } from "@/lib/genogram/types";
+import {
+  CONDITIONS,
+  CONDITION_LABELS,
+  DEFAULT_HOUSEHOLD_LABEL,
+  REL_LABELS,
+  UNION_TYPES,
+  toggleCondition,
+  type Gender,
+  type Person,
+} from "@/lib/genogram/types";
 import { useGenogram } from "@/lib/genogram/store";
 
 const selectClass =
@@ -170,6 +179,23 @@ export function PersonInspector({ person }: { person: Person }) {
         />
         Paciente identificado (anillo punteado)
       </label>
+      <fieldset>
+        <legend className="text-sm font-medium">Marcas clínicas</legend>
+        <p className="mt-1 text-xs text-muted-foreground">Se dibujan dentro del símbolo (alcohol y sustancias abajo, salud mental a la izquierda, salud física a la derecha).</p>
+        <div className="mt-1">
+          {CONDITIONS.map((c) => (
+            <label key={c} className="flex min-h-11 items-center gap-3 text-base sm:text-sm">
+              <input
+                type="checkbox"
+                className="size-5 accent-primary"
+                checked={person.conditions.includes(c)}
+                onChange={() => updatePerson(person.id, { conditions: toggleCondition(person.conditions, c) })}
+              />
+              {CONDITION_LABELS[c]}
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <div>
         <Label>Convivencia (con quién vive)</Label>
         <p className="mt-1 text-xs text-muted-foreground">

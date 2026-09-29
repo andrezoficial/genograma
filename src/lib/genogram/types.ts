@@ -15,6 +15,18 @@ export type EmotionalRelType = "close" | "distant" | "cutoff" | "conflict";
 
 export type RelType = StructuralRelType | EmotionalRelType;
 
+/** McGoldrick-style inner marks on a person symbol. */
+export type Condition = "alcohol" | "drugs" | "mental" | "physical";
+
+export const CONDITIONS: Condition[] = ["alcohol", "drugs", "mental", "physical"];
+
+export const CONDITION_LABELS: Record<Condition, string> = {
+  alcohol: "Alcohol / alcoholismo",
+  drugs: "Otras sustancias",
+  mental: "Enfermedad mental",
+  physical: "Enfermedad física",
+};
+
 export type Person = {
   id: string;
   name: string;
@@ -30,6 +42,7 @@ export type Person = {
   household: number | null;
   x: number;
   y: number;
+  conditions: Condition[];
 };
 
 export type Relationship = {
@@ -82,7 +95,23 @@ export const REL_LABELS: Record<RelType, string> = {
   conflict: "Conflicto",
 };
 
+export function normalizeConditions(raw: unknown): Condition[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Condition[] = [];
+  for (const v of raw) {
+    if ((v === "alcohol" || v === "drugs" || v === "mental" || v === "physical") && !out.includes(v)) {
+      out.push(v);
+    }
+  }
+  return out;
+}
+
+export function toggleCondition(list: Condition[], c: Condition): Condition[] {
+  return list.includes(c) ? list.filter((x) => x !== c) : [...list, c];
+}
+
 export function emptyPerson(partial: Partial<Person> & { id: string; name: string }): Person {
+  const { conditions, ...rest } = partial;
   return {
     gender: "unknown",
     age: null,
@@ -96,8 +125,57 @@ export function emptyPerson(partial: Partial<Person> & { id: string; name: strin
     household: null,
     x: 120,
     y: 80,
-    ...partial,
+    ...rest,
+    conditions: normalizeConditions(conditions),
   };
+}
+
+export function sanitizeGenogram(data: GenogramData): GenogramData {
+  const persons = (data.persons ?? [])
+    .map((p, i) =>
+      emptyPerson({
+        ...p,
+        id: p.id || `p${i + 1}`,
+        name: String(p.name ?? "").trim(),
+      }),
+    )
+    .filter((p) => p.name);
+  const ids = new Set(persons.map((p) => p.id));
+  const relationships = (data.relationships ?? []).filter(
+    (r) => r && ids.has(r.a) && ids.has(r.b) && r.a !== r.b && r.type,
+  );
+  const usedHouseholds = new Set(persons.map((p) => p.household).filter((n): n is number => n != null));
+  const households = (data.households ?? [])
+    .filter((h) => h && typeof h.id === "number" && usedHouseholds.has(h.id))
+    .map((h) => ({
+      id: h.id,
+      label: String(h.label ?? "").trim() || DEFAULT_HOUSEHOLD_LABEL,
+      labelDx: typeof h.labelDx === "number" && Number.isFinite(h.labelDx) ? h.labelDx : 0,
+      labelDy: typeof h.labelDy === "number" && Number.isFinite(h.labelDy) ? h.labelDy : 0,
+    }));
+  return { persons, relationships, households };
+}
+
+const CONDITION_PATTERNS: [Condition, RegExp][] = [
+  ["alcohol", /alcoholismo|alcoh[oó]lic[oa]s?|bebedor(?:a)?s?\s+problem|problemas?\s+con\s+el\s+alcohol|abuso\s+de\s+alcohol/i],
+  ["drugs", /drogadicc|toxicoman|otras?\s+sustancias|consume\s+drogas|adicci[oó]n\s+a\s+(?:la\s+)?(?:droga|sustancia)/i],
+  ["mental", /enfermedad\s+mental|depresi[oó]n|esquizofrenia|trastorno\s+bipolar|trastorno\s+ansioso|ansiedad\s+generalizada/i],
+  ["physical", /enfermedad\s+cr[oó]nica|c[aá]ncer\b|diabetes|enfermedad\s+f[ií]sica/i],
+];
+
+/** Marks clinical conditions mentioned next to a known name. Mutates persons in place. */
+export function applyConditionsFromText(persons: Person[], text: string): void {
+  if (!text.trim() || persons.length === 0) return;
+  const sentences = text.split(/[.\n;]+/).map((s) => s.trim()).filter(Boolean);
+  for (const sentence of sentences) {
+    const lower = sentence.toLowerCase();
+    for (const p of persons) {
+      if (!p.name || !lower.includes(p.name.toLowerCase())) continue;
+      for (const [cond, re] of CONDITION_PATTERNS) {
+        if (re.test(sentence) && !p.conditions.includes(cond)) p.conditions.push(cond);
+      }
+    }
+  }
 }
 
 export function personYears(p: Person): string {
@@ -127,4 +205,3 @@ export function personCaptionDepth(p: Person): number {
   if (p.occupation) y += 13;
   return y + 4;
 }
-

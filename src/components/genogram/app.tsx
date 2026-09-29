@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ClipboardList, Download, FileJson, FileText, MoreVertical, Network, RotateCcw, RotateCw, Trash2, UnfoldHorizontal, Upload } from "lucide-react";
+import { ClipboardList, Download, FileJson, FileText, FolderOpen, MoreVertical, Network, RotateCcw, RotateCw, Trash2, UnfoldHorizontal, Upload } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +19,7 @@ import { buildReportSvg, downloadBlob, exportPngElement, exportSvgElement, type 
 import { useGenogram } from "@/lib/genogram/store";
 import { cn } from "@/lib/utils";
 import { GenogramCanvas } from "./canvas";
+import { CasesPanel } from "./cases-panel";
 import { Credits } from "./credits";
 import { Sidebar } from "./sidebar";
 import { UpdateBanner } from "./update-banner";
@@ -48,7 +49,13 @@ export function GenogramApp() {
   const [reportOpen, setReportOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
+  const [casesOpen, setCasesOpen] = useState(false);
+  const [importConfirm, setImportConfirm] = useState<File | null>(null);
   const status = useGenogram((s) => s.status);
+  const caseName = useGenogram((s) => s.caseName);
+  const draftText = useGenogram((s) => s.draftText);
+  const setDraftText = useGenogram((s) => s.setDraftText);
+  const renameCase = useGenogram((s) => s.renameCase);
   const [toast, setToast] = useState<string | null>(null);
   const [reportMeta, setReportMeta] = useState<ReportMeta>({
     title: "",
@@ -73,10 +80,24 @@ export function GenogramApp() {
     function onKey(e: KeyboardEvent) {
       const t = e.target as HTMLElement | null;
       const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+      // Al escribir en un campo, Ctrl+Z / Ctrl+Y deben deshacer el texto, no el genograma.
+      if (typing && (e.metaKey || e.ctrlKey) && ["z", "y"].includes(e.key.toLowerCase())) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) redo();
         else undo();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        useGenogram.getState().setSidebarTab("personas");
+        useGenogram.getState().setPanel("datos");
+        requestAnimationFrame(() => document.getElementById("people-search")?.focus());
         return;
       }
       if (typing) return;
@@ -131,31 +152,64 @@ export function GenogramApp() {
     const box = boundingBox(persons, 70, 800, 500, households);
     const reportSvg = buildReportSvg(svg, box, reportMeta);
     document.body.appendChild(reportSvg);
-    const filenameBase = (reportMeta.title || "genograma-informe").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    await exportPngElement(reportSvg, `${filenameBase || "genograma-informe"}.png`);
-    reportSvg.remove();
-    setReportOpen(false);
-    useGenogram.setState({ status: "Informe listo." });
+    const filenameBase = (reportMeta.title || "genograma-informe")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    try {
+      await exportPngElement(reportSvg, `${filenameBase || "genograma-informe"}.png`);
+      setReportOpen(false);
+      useGenogram.setState({ status: "Informe listo." });
+    } catch {
+      useGenogram.setState({ status: "No se pudo generar el informe." });
+    } finally {
+      reportSvg.remove();
+    }
   }
 
   function onExportJson() {
+    const slug = (caseName || "genograma").trim().toLowerCase().replace(/[^a-z0-9áéíóúñ]+/gi, "-");
     downloadBlob(
-      "genograma.json",
-      new Blob([JSON.stringify({ persons, relationships }, null, 2)], { type: "application/json" }),
+      `${slug || "genograma"}.json`,
+      new Blob(
+        [
+          JSON.stringify(
+            { version: 4, name: caseName, persons, relationships, households, draftText },
+            null,
+            2,
+          ),
+        ],
+        { type: "application/json" },
+      ),
     );
     useGenogram.setState({ status: "JSON listo." });
   }
 
-  function onImportJson(file: File) {
+  function applyImported(file: File) {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const parsed = JSON.parse(String(reader.result)) as { persons?: unknown; relationships?: unknown };
+        const parsed = JSON.parse(String(reader.result)) as {
+          persons?: unknown;
+          relationships?: unknown;
+          households?: unknown;
+          name?: unknown;
+          draftText?: unknown;
+        };
         if (!Array.isArray(parsed.persons)) throw new Error("invalid");
         loadData(
-          { persons: parsed.persons as typeof persons, relationships: (parsed.relationships as typeof relationships) ?? [] },
+          {
+            persons: parsed.persons as typeof persons,
+            relationships: (parsed.relationships as typeof relationships) ?? [],
+            households: Array.isArray(parsed.households) ? (parsed.households as typeof households) : [],
+          },
           "Archivo importado.",
         );
+        if (typeof parsed.name === "string" && parsed.name.trim()) renameCase(parsed.name.trim());
+        if (typeof parsed.draftText === "string") setDraftText(parsed.draftText);
       } catch {
         useGenogram.setState({ status: "No se pudo leer ese JSON." });
       }
@@ -163,12 +217,20 @@ export function GenogramApp() {
     reader.readAsText(file);
   }
 
+  function onImportJson(file: File) {
+    if (persons.length > 0) {
+      setImportConfirm(file);
+      return;
+    }
+    applyImported(file);
+  }
+
   return (
     <div className="flex h-dvh min-h-0 flex-col bg-background">
       <header className="flex h-[calc(3rem+env(safe-area-inset-top))] shrink-0 items-center justify-between gap-3 bg-bar px-3 pt-[env(safe-area-inset-top)] text-bar-foreground sm:px-5">
         <div className="flex min-w-0 items-baseline gap-3">
           <h1 className="font-display text-lg leading-none font-medium italic tracking-tight">Genograma Free</h1>
-          <p className="hidden text-xs tracking-wide text-bar-foreground/55 sm:block">ficha familiar</p>
+          <p className="hidden max-w-[12rem] truncate text-xs tracking-wide text-bar-foreground/55 sm:block">{caseName}</p>
           <span className="hidden h-3 w-px bg-bar-foreground/20 md:block" aria-hidden />
           <Credits variant="bar" />
         </div>
@@ -241,6 +303,16 @@ export function GenogramApp() {
             aria-label="Descargar PNG"
           >
             <Download /> <span className="hidden sm:inline">PNG</span>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="hidden size-10 text-bar-foreground hover:bg-white/10 hover:text-bar-foreground md:inline-flex"
+            onClick={() => setCasesOpen(true)}
+            aria-label="Casos"
+          >
+            <FolderOpen />
           </Button>
           <Button
             type="button"
@@ -362,6 +434,7 @@ export function GenogramApp() {
           >
             {(
               [
+                [FolderOpen, "Casos", () => setCasesOpen(true), false],
                 [Download, "Descargar SVG", () => onExportSvg(), false],
                 [ClipboardList, "Informe clínico", () => setReportOpen(true), persons.length === 0],
                 [FileJson, "Exportar JSON", () => onExportJson(), false],
@@ -386,6 +459,30 @@ export function GenogramApp() {
           </div>
         </div>
       ) : null}
+
+      {casesOpen ? <CasesPanel onClose={() => setCasesOpen(false)} /> : null}
+
+      <AlertDialog open={importConfirm != null} onOpenChange={(open) => !open && setImportConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Reemplazar el caso abierto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              El archivo importado sustituye a las personas y vínculos de este caso. Puedes deshacerlo después.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (importConfirm) applyImported(importConfirm);
+                setImportConfirm(null);
+              }}
+            >
+              Importar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {reportOpen ? (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setReportOpen(false)}>

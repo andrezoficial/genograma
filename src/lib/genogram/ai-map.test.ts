@@ -44,3 +44,15 @@ test("households come only from people that carry a household number", () => {
   assert.deepEqual(d.households?.map((h) => h.id), [1]);
   assert.equal(d.persons.find((p) => p.name === "C")!.household, null);
 });
+
+test("AI conditions are normalized and unknown values dropped", () => {
+  const d = mapAi(
+    [
+      { id: "p1", name: "Juan", conditions: ["alcohol", "mental", "alcohol", "nonsense"] },
+      { id: "p2", name: "Ana" },
+    ],
+    [],
+  );
+  assert.deepEqual(d.persons[0]!.conditions, ["alcohol", "mental"]);
+  assert.deepEqual(d.persons[1]!.conditions, []);
+});

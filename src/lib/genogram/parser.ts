@@ -3,6 +3,7 @@ import {
   emptyPerson,
   PARENT_TYPES,
   UNION_TYPES,
+  applyConditionsFromText,
   type Gender,
   type GenogramData,
   type Person,
@@ -69,6 +70,8 @@ Luis está divorciado de Rosa de 47.
 Juan tiene otro hermano llamado Marcos de 46, que se separó de Elena de 44.
 María es la paciente identificada.
 María, Juan, Laura, Pedro y Sofía viven juntos.
+Juan tiene alcoholismo.
+Carmen padece depresión.
 María es muy cercana a Laura.
 Pedro y Juan tienen una relación distante.
 Luis cortó la relación con Juan.
@@ -707,7 +710,10 @@ function applyAdoptionAndKids(b: Builder, sentence: string) {
 export function parseFamilyText(text: string, opts: NarrativeOptions = {}): GenogramData {
   if (looksNarrative(text)) {
     const narrative = parseNarrative(text, opts);
-    if (narrative.persons.length > 0) return narrative;
+    if (narrative.persons.length > 0) {
+      applyConditionsFromText(narrative.persons, text);
+      return narrative;
+    }
   }
   const b = makeBuilder();
   const cleaned = preprocess(text).trim();
@@ -716,7 +722,7 @@ export function parseFamilyText(text: string, opts: NarrativeOptions = {}): Geno
   const sentences = cleaned
     // "Elena, que está divorciada de Mario" → keep the subject: "Elena está divorciada de Mario"
     .replace(/,\s*(?:que|quien)\s+/giu, " ")
-    .split(/[\.\n;]+|\s+(?:pero|mientras(?:\s+que)?|aunque)\s+/iu)
+    .split(/[.\n;]+|\s+(?:pero|mientras(?:\s+que)?|aunque)\s+/iu)
     .map((s) => s.trim())
     .filter(Boolean);
 
@@ -796,7 +802,7 @@ export function parseFamilyText(text: string, opts: NarrativeOptions = {}): Geno
     }
 
     const marriageRe = new RegExp(
-      `(${NAME})(?:\\s+${AGE})?\\s+(?:est[aá]\\s+)?casad([oa])\\s+con\\s+(${NAME})(?:\\s+${AGE})?`,
+      `(${NAME})(?:,?\\s+${AGE})?,?\\s+(?:est[aá]\\s+)?casad([oa])\\s+con\\s+(${NAME})(?:,?\\s+${AGE})?`,
       "u",
     );
     const marriageRe2 = new RegExp(`(${NAME})\\s+(?:y|e)\\s+(${NAME})\\s+(?:est[aá]n\\s+)?casad[oa]s`, "u");
@@ -1008,6 +1014,18 @@ export function parseFamilyText(text: string, opts: NarrativeOptions = {}): Geno
       const cid = getOrCreate(b, cleanName(m[2]), { gender: g });
       const parentIds = parentsForChildren(b, sentence, [cleanName(m[2])]);
       for (const pid of parentIds) addRel(b, "parent_child", pid, cid);
+    } else if ((m = sentence.match(/^\s*hij([oa])s?\s*:\s*(.+)$/iu))) {
+      // "Hijos: Mateo 10, Sara 8" (sin verbo): se cuelgan de la última pareja mencionada
+      const kids = parseNamedPeople(m[2]);
+      if (kids.length > 0) {
+        const defaultGender: Gender | null = m[1].toLowerCase() === "a" ? "female" : "male";
+        const parentIds = parentsForChildren(
+          b,
+          sentence,
+          kids.map((k) => k.name),
+        );
+        attachKids(b, parentIds, kids, false, kids.length === 1 ? defaultGender : null);
+      }
     }
 
     const sibRe = new RegExp(
@@ -1164,6 +1182,8 @@ export function parseFamilyText(text: string, opts: NarrativeOptions = {}): Geno
   const usedHouseholds = [
     ...new Set(b.persons.map((p) => p.household).filter((n): n is number => n != null)),
   ].sort((a, c) => a - c);
+
+  applyConditionsFromText(b.persons, text);
 
   return {
     persons: b.persons,

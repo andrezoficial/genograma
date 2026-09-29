@@ -8,6 +8,8 @@ export const UNKNOWN = "#e3dcc9";
 export const DECEASED = "#a99d8a";
 export const IP_RING = "#8a5a3c";
 export const HOUSEHOLD = "#5b6b5e";
+export const COND_MENTAL = "#5a4a78";
+export const COND_PHYSICAL = "#8a3b32";
 
 export type LegendKind =
   | "male"
@@ -15,6 +17,10 @@ export type LegendKind =
   | "unknown"
   | "deceased"
   | "ip"
+  | "cond_alcohol"
+  | "cond_drugs"
+  | "cond_mental"
+  | "cond_physical"
   | "household"
   | "marriage"
   | "cohabitation"
@@ -50,6 +56,15 @@ export const LEGEND_GROUPS: { title: string; items: { kind: LegendKind; label: s
       { kind: "unknown", label: "Género s/d" },
       { kind: "deceased", label: "Fallecido/a" },
       { kind: "ip", label: "Paciente identificado" },
+    ],
+  },
+  {
+    title: "Marcas clínicas",
+    items: [
+      { kind: "cond_alcohol", label: "Alcohol / alcoholismo" },
+      { kind: "cond_drugs", label: "Otras sustancias" },
+      { kind: "cond_mental", label: "Enfermedad mental" },
+      { kind: "cond_physical", label: "Enfermedad física" },
     ],
   },
   {
@@ -130,6 +145,48 @@ export function glyphSpec(kind: LegendKind): GlyphSpec {
             attrs: { cx: 9, cy: 9, r: 8, fill: "none", stroke: IP_RING, "stroke-width": 1.5, "stroke-dasharray": "2 2.5" },
           },
           { tag: "circle", attrs: { cx: 9, cy: 9, r: 5.2, fill: FEMALE, stroke: INK, "stroke-width": 1.4 } },
+        ],
+      };
+    case "cond_alcohol":
+      return {
+        viewBox: "0 0 16 16",
+        width: 14,
+        height: 14,
+        els: [
+          { tag: "rect", attrs: { x: 1.5, y: 1.5, width: 13, height: 13, fill: MALE, stroke: INK, "stroke-width": 1.6 } },
+          { tag: "rect", attrs: { x: 1.5, y: 9, width: 13, height: 5.5, fill: INK } },
+        ],
+      };
+    case "cond_drugs":
+      return {
+        viewBox: "0 0 16 16",
+        width: 14,
+        height: 14,
+        els: [
+          { tag: "rect", attrs: { x: 1.5, y: 1.5, width: 13, height: 13, fill: MALE, stroke: INK, "stroke-width": 1.6 } },
+          { tag: "line", attrs: { x1: 2, y1: 14, x2: 8, y2: 8, stroke: INK, "stroke-width": 1.3 } },
+          { tag: "line", attrs: { x1: 6, y1: 14, x2: 12, y2: 8, stroke: INK, "stroke-width": 1.3 } },
+          { tag: "line", attrs: { x1: 10, y1: 14, x2: 14, y2: 10, stroke: INK, "stroke-width": 1.3 } },
+        ],
+      };
+    case "cond_mental":
+      return {
+        viewBox: "0 0 16 16",
+        width: 14,
+        height: 14,
+        els: [
+          { tag: "rect", attrs: { x: 1.5, y: 1.5, width: 13, height: 13, fill: MALE, stroke: INK, "stroke-width": 1.6 } },
+          { tag: "rect", attrs: { x: 1.5, y: 1.5, width: 6.5, height: 13, fill: COND_MENTAL } },
+        ],
+      };
+    case "cond_physical":
+      return {
+        viewBox: "0 0 16 16",
+        width: 14,
+        height: 14,
+        els: [
+          { tag: "rect", attrs: { x: 1.5, y: 1.5, width: 13, height: 13, fill: MALE, stroke: INK, "stroke-width": 1.6 } },
+          { tag: "rect", attrs: { x: 8, y: 1.5, width: 6.5, height: 13, fill: COND_PHYSICAL } },
         ],
       };
     case "household":

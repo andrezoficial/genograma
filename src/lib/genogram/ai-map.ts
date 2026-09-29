@@ -1,4 +1,4 @@
-import { DEFAULT_HOUSEHOLD_LABEL, emptyPerson, type Gender, type GenogramData, type RelType } from "./types.ts";
+import { DEFAULT_HOUSEHOLD_LABEL, emptyPerson, normalizeConditions, type Gender, type GenogramData, type RelType } from "./types.ts";
 import { inferGenderFromName } from "./gender.ts";
 
 export const REL_TYPES: RelType[] = [
@@ -28,6 +28,7 @@ export type AiPerson = {
   occupation?: string;
   notes?: string;
   identifiedPatient?: boolean;
+  conditions?: unknown;
   household?: number | null;
 };
 
@@ -65,6 +66,7 @@ export function mapAi(persons: AiPerson[], rels: AiRel[]): GenogramData {
         occupation: String(p.occupation ?? ""),
         notes: String(p.notes ?? ""),
         identifiedPatient: Boolean(p.identifiedPatient),
+        conditions: normalizeConditions(p.conditions),
         household: typeof p.household === "number" ? p.household : null,
       }),
     );

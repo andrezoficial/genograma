@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BASIC_EXAMPLE_TEXT, EXAMPLE_TEXT, parseFamilyText } from "./parser.ts";
-import { PARENT_TYPES, UNION_TYPES } from "./types.ts";
+import { PARENT_TYPES, UNION_TYPES, sanitizeGenogram } from "./types.ts";
 
 function names(data: ReturnType<typeof parseFamilyText>) {
   return data.persons.map((p) => p.name).sort();
@@ -176,6 +176,8 @@ function checkFullLegend(data: ReturnType<typeof parseFamilyText>) {
   assert.ok(hasRel(data, "distant", "Pedro", "Juan"), "Distante");
   assert.ok(hasRel(data, "cutoff", "Luis", "Juan"), "Corte");
   assert.ok(hasRel(data, "conflict", "María", "Ana"), "Conflicto");
+  assert.ok(person(data, "Juan").conditions.includes("alcohol"), "Alcohol");
+  assert.ok(person(data, "Carmen").conditions.includes("mental"), "Salud mental");
 }
 
 test("full example detects every item of the legend", () => {
@@ -190,6 +192,26 @@ test("full example detects every item of the legend", () => {
 
 test("full example still works in lowercase", () => {
   checkFullLegend(parseFamilyText(EXAMPLE_TEXT.toLowerCase()));
+});
+
+test("json roundtrip keeps households and clinical marks", () => {
+  const data = parseFamilyText(EXAMPLE_TEXT);
+  const json = JSON.parse(JSON.stringify({ persons: data.persons, relationships: data.relationships, households: data.households })) as typeof data;
+  const clean = sanitizeGenogram(json);
+  assert.ok((clean.households ?? []).length >= 1);
+  assert.ok(clean.persons.find((p) => p.name === "Juan")?.conditions.includes("alcohol"));
+  assert.equal(clean.persons.length, data.persons.length);
+});
+
+test("clinical phrases attach only to the named person", () => {
+  const data = parseFamilyText(
+    "María está casada con Juan. Tienen dos hijos: Pedro y Laura. Juan tiene alcoholismo. María padece depresión. Pedro consume drogas. Laura tiene diabetes.",
+  );
+  assert.ok(person(data, "Juan").conditions.includes("alcohol"));
+  assert.ok(person(data, "María").conditions.includes("mental"));
+  assert.ok(person(data, "Pedro").conditions.includes("drugs"));
+  assert.ok(person(data, "Laura").conditions.includes("physical"));
+  assert.equal(person(data, "Juan").conditions.includes("mental"), false);
 });
 
 const PHRASES: [string, string, string, string][] = [
@@ -422,4 +444,19 @@ test("layout: a partner without parents sits on the row of their partner", async
   const son = laid.find((p) => p.name === "Oliver Escarraga" && p.age === 43)!;
   assert.equal(gen("Judith Marciales"), son.generation);
   assert.ok(gen("Camilo Escarraga") > gen("Edgar"));
+});
+
+test("commas between name, age and 'casado con' still create the marriage", () => {
+  const data = parseFamilyText("Carlos, 40 años, casado con Lucía, 38. Hijos: Mateo 10, Sara 8.");
+  assert.deepEqual(names(data), ["Carlos", "Lucía", "Mateo", "Sara"]);
+  assert.equal(data.persons.find((p) => p.name === "Lucía")?.age, 38);
+  assert.ok(hasRel(data, "marriage", "Carlos", "Lucía"));
+});
+
+test("'Hijos:' without a verb attaches the kids to the last couple", () => {
+  const data = parseFamilyText("Carlos, 40 años, casado con Lucía, 38. Hijos: Mateo 10, Sara 8.");
+  for (const kid of ["Mateo", "Sara"]) {
+    assert.ok(parentOf(data, "Carlos", kid));
+    assert.ok(parentOf(data, "Lucía", kid));
+  }
 });
